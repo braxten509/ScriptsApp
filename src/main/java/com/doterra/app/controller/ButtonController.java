@@ -3,6 +3,7 @@ package com.doterra.app.controller;
 import com.doterra.app.model.ButtonTab;
 import com.doterra.app.model.ScriptButton;
 
+import java.io.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -11,9 +12,11 @@ import java.util.Map;
 public class ButtonController {
     
     private final Map<String, ButtonTab> tabs;
+    private static final String SAVE_FILE = "doterra_buttons.dat";
     
     public ButtonController() {
         tabs = new HashMap<>();
+        loadState();
     }
     
     public void addTab(ButtonTab tab) {
@@ -56,10 +59,38 @@ public class ButtonController {
     }
     
     public void saveState() {
-        // To be implemented: Save the state to a file
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(SAVE_FILE))) {
+            // Convert to list for serialization
+            List<ButtonTab> tabList = new ArrayList<>(tabs.values());
+            oos.writeObject(tabList);
+        } catch (IOException e) {
+            System.err.println("Error saving button state: " + e.getMessage());
+        }
     }
     
+    @SuppressWarnings("unchecked")
     public void loadState() {
-        // To be implemented: Load the state from a file
+        File saveFile = new File(SAVE_FILE);
+        if (!saveFile.exists()) {
+            return; // No saved state to load
+        }
+        
+        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(SAVE_FILE))) {
+            List<ButtonTab> tabList = (List<ButtonTab>) ois.readObject();
+            tabs.clear();
+            for (ButtonTab tab : tabList) {
+                tabs.put(tab.getId(), tab);
+            }
+        } catch (IOException | ClassNotFoundException e) {
+            System.err.println("Error loading button state: " + e.getMessage());
+        }
+    }
+    
+    public void reorderTabs(List<ButtonTab> newOrder) {
+        // Clear existing tabs and rebuild in new order
+        tabs.clear();
+        for (ButtonTab tab : newOrder) {
+            tabs.put(tab.getId(), tab);
+        }
     }
 }

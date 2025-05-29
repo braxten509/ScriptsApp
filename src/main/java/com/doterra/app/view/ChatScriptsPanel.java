@@ -16,8 +16,14 @@ import javafx.stage.StageStyle;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.Dragboard;
+import javafx.scene.input.TransferMode;
+import javafx.scene.input.DragEvent;
+import javafx.scene.input.MouseEvent;
+import javafx.scene.Node;
 
 import java.util.Optional;
+import java.util.ArrayList;
 
 public class ChatScriptsPanel {
     
@@ -195,6 +201,9 @@ public class ChatScriptsPanel {
         buttonPane.setHgap(10);
         buttonPane.setVgap(10);
         
+        // Enable drag-and-drop for buttons within the pane
+        setupButtonPaneDragAndDrop(buttonPane);
+        
         // Wrap in scroll pane
         ScrollPane scrollPane = new ScrollPane(buttonPane);
         scrollPane.setFitToWidth(true);
@@ -210,6 +219,9 @@ public class ChatScriptsPanel {
         // Add tab to tab pane
         tabPane.getTabs().add(tab);
         tabPane.getSelectionModel().select(tab);
+        
+        // Enable drag-and-drop for the tab
+        setupTabDragAndDrop(tab);
     }
     
     private void addButtonToTab(Tab tab, ScriptButton scriptButton) {
@@ -264,6 +276,9 @@ public class ChatScriptsPanel {
                 contextMenu.show(button, event.getScreenX(), event.getScreenY());
             }
         });
+        
+        // Enable drag-and-drop for the button
+        setupButtonDragAndDrop(button, scriptButton);
         
         // Add button to the flow pane
         buttonPane.getChildren().add(button);
@@ -348,5 +363,249 @@ public class ChatScriptsPanel {
     
     public void setTextAreaContent(String content) {
         textArea.setText(content);
+    }
+    
+    private void setupTabDragAndDrop(Tab tab) {
+        // Make tab draggable
+        Label tabLabel = (Label) tab.getGraphic();
+        if (tabLabel == null) {
+            tabLabel = new Label(tab.getText());
+            tab.setGraphic(tabLabel);
+            tab.setText("");
+        }
+        
+        final Label finalTabLabel = tabLabel;
+        
+        tabLabel.setOnDragDetected(event -> {
+            Dragboard dragboard = finalTabLabel.startDragAndDrop(TransferMode.MOVE);
+            ClipboardContent content = new ClipboardContent();
+            content.putString(tab.getId());
+            dragboard.setContent(content);
+            event.consume();
+        });
+        
+        tabLabel.setOnDragOver(event -> {
+            if (event.getGestureSource() != finalTabLabel && event.getDragboard().hasString()) {
+                event.acceptTransferModes(TransferMode.MOVE);
+            }
+            event.consume();
+        });
+        
+        tabLabel.setOnDragDropped(event -> {
+            Dragboard dragboard = event.getDragboard();
+            boolean success = false;
+            
+            if (dragboard.hasString()) {
+                String draggedTabId = dragboard.getString();
+                Tab draggedTab = findTabById(draggedTabId);
+                Tab targetTab = tab;
+                
+                if (draggedTab != null && draggedTab != targetTab) {
+                    int draggedIndex = tabPane.getTabs().indexOf(draggedTab);
+                    int targetIndex = tabPane.getTabs().indexOf(targetTab);
+                    
+                    // Reorder tabs
+                    tabPane.getTabs().remove(draggedTab);
+                    tabPane.getTabs().add(targetIndex, draggedTab);
+                    
+                    // Update controller order
+                    updateTabOrder();
+                    success = true;
+                }
+            }
+            
+            event.setDropCompleted(success);
+            event.consume();
+        });
+    }
+    
+    private void setupButtonDragAndDrop(Button button, ScriptButton scriptButton) {
+        button.setOnDragDetected(event -> {
+            Dragboard dragboard = button.startDragAndDrop(TransferMode.MOVE);
+            ClipboardContent content = new ClipboardContent();
+            content.putString(scriptButton.getId());
+            dragboard.setContent(content);
+            
+            // Store the source tab ID - find the tab containing this button
+            Tab sourceTab = findTabContainingButton(button);
+            if (sourceTab != null) {
+                button.getProperties().put("sourceTabId", sourceTab.getId());
+            }
+            event.consume();
+        });
+    }
+    
+    private void setupButtonPaneDragAndDrop(FlowPane buttonPane) {
+        buttonPane.setOnDragOver(event -> {
+            if (event.getGestureSource() != buttonPane && event.getDragboard().hasString()) {
+                event.acceptTransferModes(TransferMode.MOVE);
+            }
+            event.consume();
+        });
+        
+        buttonPane.setOnDragDropped(event -> {
+            Dragboard dragboard = event.getDragboard();
+            boolean success = false;
+            
+            if (dragboard.hasString()) {
+                String draggedButtonId = dragboard.getString();
+                Node source = (Node) event.getGestureSource();
+                
+                if (source instanceof Button) {
+                    Button draggedButton = (Button) source;
+                    String sourceTabId = (String) draggedButton.getProperties().get("sourceTabId");
+                    
+                    // Get target tab
+                    Tab targetTab = findTabContainingPane(buttonPane);
+                    String targetTabId = targetTab != null ? targetTab.getId() : null;
+                    
+                    if (targetTabId == null) {
+                        return;
+                    }
+                    
+                    // Find the script button
+                    ScriptButton scriptButton = findScriptButton(sourceTabId, draggedButtonId);
+                    
+                    if (scriptButton != null) {
+                        // Calculate drop position
+                        double dropX = event.getX();
+                        double dropY = event.getY();
+                        int targetIndex = calculateDropIndex(buttonPane, dropX, dropY);
+                        
+                        // Move button to new position
+                        if (!sourceTabId.equals(targetTabId)) {
+                            // Moving between tabs
+                            buttonController.removeButtonFromTab(sourceTabId, draggedButtonId);
+                            buttonController.addButtonToTab(targetTabId, scriptButton);
+                            buttonPane.getChildren().remove(draggedButton);
+                        }
+                        
+                        // Reorder within the pane
+                        buttonPane.getChildren().remove(draggedButton);
+                        buttonPane.getChildren().add(targetIndex, draggedButton);
+                        
+                        // Update the button's properties for future drags
+                        draggedButton.getProperties().put("sourceTabId", targetTabId);
+                        
+                        // Update button order in controller
+                        updateButtonOrder(targetTab);
+                        success = true;
+                    }
+                }
+            }
+            
+            event.setDropCompleted(success);
+            event.consume();
+        });
+    }
+    
+    private Tab findTabById(String tabId) {
+        for (Tab tab : tabPane.getTabs()) {
+            if (tab.getId().equals(tabId)) {
+                return tab;
+            }
+        }
+        return null;
+    }
+    
+    private ScriptButton findScriptButton(String tabId, String buttonId) {
+        List<ButtonTab> tabs = buttonController.getAllTabs();
+        for (ButtonTab tab : tabs) {
+            if (tab.getId().equals(tabId)) {
+                for (ScriptButton button : tab.getButtons()) {
+                    if (button.getId().equals(buttonId)) {
+                        return button;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+    
+    private int calculateDropIndex(FlowPane pane, double x, double y) {
+        int index = 0;
+        for (Node node : pane.getChildren()) {
+            if (node instanceof Button) {
+                double nodeX = node.getLayoutX() + node.getBoundsInLocal().getWidth() / 2;
+                double nodeY = node.getLayoutY() + node.getBoundsInLocal().getHeight() / 2;
+                
+                if (y < nodeY || (y <= nodeY + node.getBoundsInLocal().getHeight() && x < nodeX)) {
+                    break;
+                }
+                index++;
+            }
+        }
+        return index;
+    }
+    
+    private void updateTabOrder() {
+        List<ButtonTab> newOrder = new ArrayList<>();
+        for (Tab tab : tabPane.getTabs()) {
+            String tabId = tab.getId();
+            ButtonTab buttonTab = findButtonTab(tabId);
+            if (buttonTab != null) {
+                newOrder.add(buttonTab);
+            }
+        }
+        buttonController.reorderTabs(newOrder);
+        buttonController.saveState();
+    }
+    
+    private void updateButtonOrder(Tab tab) {
+        String tabId = tab.getId();
+        ButtonTab buttonTab = findButtonTab(tabId);
+        
+        if (buttonTab != null) {
+            List<ScriptButton> newOrder = new ArrayList<>();
+            ScrollPane scrollPane = (ScrollPane) tab.getContent();
+            FlowPane buttonPane = (FlowPane) scrollPane.getContent();
+            
+            for (Node node : buttonPane.getChildren()) {
+                if (node instanceof Button) {
+                    Button btn = (Button) node;
+                    // Find the script button by name
+                    for (ScriptButton scriptButton : buttonTab.getButtons()) {
+                        if (scriptButton.getName().equals(btn.getText())) {
+                            newOrder.add(scriptButton);
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            buttonTab.setButtons(newOrder);
+            buttonController.saveState();
+        }
+    }
+    
+    private ButtonTab findButtonTab(String tabId) {
+        List<ButtonTab> tabs = buttonController.getAllTabs();
+        for (ButtonTab tab : tabs) {
+            if (tab.getId().equals(tabId)) {
+                return tab;
+            }
+        }
+        return null;
+    }
+    
+    private Tab findTabContainingButton(Button button) {
+        for (Tab tab : tabPane.getTabs()) {
+            ScrollPane scrollPane = (ScrollPane) tab.getContent();
+            FlowPane flowPane = (FlowPane) scrollPane.getContent();
+            if (flowPane.getChildren().contains(button)) {
+                return tab;
+            }
+        }
+        return null;
+    }
+    
+    private Tab findTabContainingPane(FlowPane pane) {
+        for (Tab tab : tabPane.getTabs()) {
+            ScrollPane scrollPane = (ScrollPane) tab.getContent();
+            if (scrollPane.getContent() == pane) {
+                return tab;
+            }
+        }
+        return null;
     }
 }

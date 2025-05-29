@@ -7,6 +7,8 @@ import java.util.UUID;
 
 public class ButtonTab implements Serializable {
     
+    private static final long serialVersionUID = 1L;
+    
     private String id;
     private String name;
     private List<ScriptButton> buttons;
@@ -31,6 +33,10 @@ public class ButtonTab implements Serializable {
     
     public List<ScriptButton> getButtons() {
         return buttons;
+    }
+    
+    public void setButtons(List<ScriptButton> buttons) {
+        this.buttons = buttons;
     }
     
     public void addButton(ScriptButton button) {
