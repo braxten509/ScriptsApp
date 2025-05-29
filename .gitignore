@@ -36,3 +36,7 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+### Large files ###
+jdk-*.tar.gz
+*.tar.gz
