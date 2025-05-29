@@ -70,8 +70,12 @@
 /* Script Buttons */
 .script-button {
     -fx-padding: 10;
+    -fx-pref-width: 120;
+    -fx-pref-height: 50;
     -fx-min-width: 120;
     -fx-min-height: 50;
+    -fx-max-width: 120;
+    -fx-max-height: 50;
     -fx-background-radius: 5;
     -fx-border-radius: 5;
     -fx-wrap-text: true;
@@ -108,11 +112,18 @@
     -fx-cursor: move;
 }
 
-.button-drag-over {
+.drag-target {
     -fx-background-color: #E3F2FD;
     -fx-border-color: #2196F3;
     -fx-border-width: 2;
     -fx-border-style: dashed;
+    -fx-effect: dropshadow(gaussian, rgba(33,150,243,0.5), 10, 0, 0, 0);
+}
+
+.selected {
+    -fx-border-color: #FF9800;
+    -fx-border-width: 3;
+    -fx-effect: dropshadow(gaussian, rgba(255,152,0,0.7), 8, 0, 0, 0);
 }
 
 .drop-indicator {
