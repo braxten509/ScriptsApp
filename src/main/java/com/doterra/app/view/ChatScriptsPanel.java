@@ -4,6 +4,7 @@ import com.doterra.app.controller.ButtonController;
 import com.doterra.app.model.ButtonTab;
 import com.doterra.app.model.ScriptButton;
 import com.doterra.app.util.ColorUtil;
+import java.util.List;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
@@ -13,6 +14,8 @@ import javafx.scene.paint.Color;
 import javafx.scene.control.Alert.AlertType;
 import javafx.stage.StageStyle;
 import javafx.scene.input.MouseButton;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
 
 import java.util.Optional;
 
@@ -35,9 +38,20 @@ public class ChatScriptsPanel {
         tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         
         // Create default "General" tab
-        ButtonTab generalTab = new ButtonTab("General");
-        buttonController.addTab(generalTab);
-        addTabToUI(generalTab);
+        // Load existing tabs or create default
+        List<ButtonTab> existingTabs = buttonController.getAllTabs();
+        if (existingTabs.isEmpty()) {
+            // Create default tab only if no saved tabs exist
+            ButtonTab generalTab = new ButtonTab("General");
+            buttonController.addTab(generalTab);
+            buttonController.saveState();
+            addTabToUI(generalTab);
+        } else {
+            // Load all existing tabs
+            for (ButtonTab tab : existingTabs) {
+                addTabToUI(tab);
+            }
+        }
         
         // Create text area for bottom section
         textArea = new TextArea();
@@ -144,6 +158,7 @@ public class ChatScriptsPanel {
                     
                     // Add button to the UI
                     addButtonToTab(selectedTab, button);
+                    buttonController.saveState();
                 }
             }
         });
@@ -162,6 +177,7 @@ public class ChatScriptsPanel {
                 ButtonTab newTab = new ButtonTab(name);
                 buttonController.addTab(newTab);
                 addTabToUI(newTab);
+                buttonController.saveState();
             } else {
                 showAlert("Invalid Name", "Tab name cannot be empty.");
             }
@@ -202,15 +218,24 @@ public class ChatScriptsPanel {
         
         // Create button UI
         Button button = new Button(scriptButton.getName());
+        button.getStyleClass().add("script-button");
         button.setPrefSize(120, 50);
         button.setWrapText(true);
         
-        // Set button color
+        // Set button color using -fx-base to preserve hover effects
         String colorStyle = ColorUtil.colorToHex(scriptButton.getColor());
-        button.setStyle("-fx-background-color: " + colorStyle + ";");
+        button.setStyle("-fx-base: " + colorStyle + ";");
         
         // Set button action
-        button.setOnAction(e -> textArea.setText(scriptButton.getContent()));
+        button.setOnAction(e -> {
+            String content = scriptButton.getContent();
+            textArea.setText(content);
+            
+            // Copy to clipboard
+            ClipboardContent clipboardContent = new ClipboardContent();
+            clipboardContent.putString(content);
+            Clipboard.getSystemClipboard().setContent(clipboardContent);
+        });
         
         // Add context menu for right-click
         ContextMenu contextMenu = new ContextMenu();
@@ -228,6 +253,7 @@ public class ChatScriptsPanel {
         deleteItem.setOnAction(e -> {
             buttonController.removeButtonFromTab(tab.getId(), scriptButton.getId());
             buttonPane.getChildren().remove(button);
+            buttonController.saveState();
         });
         
         contextMenu.getItems().addAll(renameItem, changeColorItem, duplicateItem, deleteItem);
@@ -255,6 +281,7 @@ public class ChatScriptsPanel {
             if (!name.trim().isEmpty()) {
                 scriptButton.setName(name);
                 button.setText(name);
+                buttonController.saveState();
             } else {
                 showAlert("Invalid Name", "Button name cannot be empty.");
             }
@@ -288,7 +315,8 @@ public class ChatScriptsPanel {
         result.ifPresent(color -> {
             scriptButton.setColor(color);
             String colorStyle = ColorUtil.colorToHex(color);
-            button.setStyle("-fx-background-color: " + colorStyle + ";");
+            button.setStyle("-fx-base: " + colorStyle + ";");
+            buttonController.saveState();
         });
     }
     
@@ -298,6 +326,7 @@ public class ChatScriptsPanel {
         
         buttonController.addButtonToTab(tabId, duplicatedButton);
         addButtonToTab(tab, duplicatedButton);
+        buttonController.saveState();
     }
     
     private void showAlert(String title, String message) {
