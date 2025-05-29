@@ -1,0 +1,52 @@
+package com.doterra.app.model;
+
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+public class ButtonTab implements Serializable {
+    
+    private String id;
+    private String name;
+    private List<ScriptButton> buttons;
+    
+    public ButtonTab(String name) {
+        this.id = UUID.randomUUID().toString();
+        this.name = name;
+        this.buttons = new ArrayList<>();
+    }
+    
+    public String getId() {
+        return id;
+    }
+    
+    public String getName() {
+        return name;
+    }
+    
+    public void setName(String name) {
+        this.name = name;
+    }
+    
+    public List<ScriptButton> getButtons() {
+        return buttons;
+    }
+    
+    public void addButton(ScriptButton button) {
+        buttons.add(button);
+    }
+    
+    public boolean removeButton(String buttonId) {
+        return buttons.removeIf(button -> button.getId().equals(buttonId));
+    }
+    
+    public ScriptButton getButton(String buttonId) {
+        for (ScriptButton button : buttons) {
+            if (button.getId().equals(buttonId)) {
+                return button;
+            }
+        }
+        return null;
+    }
+}

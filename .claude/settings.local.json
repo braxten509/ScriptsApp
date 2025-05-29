@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mvn test:*)",
+      "Bash(ping:*)",
+      "Bash(nslookup:*)",
+      "Bash(curl:*)",
+      "Bash(cat:*)",
+      "Bash(ls:*)",
+      "Bash(sudo cp:*)",
+      "Bash(sudo sed:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": false
+}

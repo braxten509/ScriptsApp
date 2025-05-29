@@ -1,0 +1,78 @@
+/* Main CSS file for doTERRA App 2.0 */
+
+.root {
+    -fx-font-family: "Segoe UI", Arial, sans-serif;
+    -fx-background-color: #f5f5f5;
+}
+
+/* Tab Pane Styling */
+.tab-pane .tab-header-area .tab-header-background {
+    -fx-background-color: #e0e0e0;
+}
+
+.tab-pane .tab {
+    -fx-background-color: #d0d0d0;
+    -fx-padding: 5 10 5 10;
+}
+
+.tab-pane .tab:selected {
+    -fx-background-color: #ffffff;
+}
+
+.tab-pane .tab-content-area {
+    -fx-background-color: #ffffff;
+}
+
+/* Button Styling */
+.button {
+    -fx-background-radius: 4;
+    -fx-padding: 8 15 8 15;
+    -fx-background-color: #4B9CD3;
+    -fx-text-fill: white;
+}
+
+.button:hover {
+    -fx-background-color: #5BAAE3;
+}
+
+.button:pressed {
+    -fx-background-color: #3A8CC3;
+}
+
+/* Sidebar Styling */
+.sidebar {
+    -fx-background-color: #3a3a3a;
+    -fx-padding: 10;
+}
+
+.sidebar-button {
+    -fx-background-color: #555555;
+    -fx-text-fill: white;
+    -fx-font-size: 14px;
+    -fx-pref-height: 40;
+    -fx-max-width: Infinity;
+}
+
+.sidebar-button:hover {
+    -fx-background-color: #777777;
+}
+
+/* Text Areas */
+.text-area {
+    -fx-font-size: 14px;
+}
+
+/* HTML Editor */
+.html-editor {
+    -fx-font-size: 14px;
+}
+
+/* Script Buttons */
+.script-button {
+    -fx-padding: 10;
+    -fx-min-width: 120;
+    -fx-min-height: 50;
+    -fx-background-radius: 5;
+    -fx-border-radius: 5;
+    -fx-wrap-text: true;
+}
