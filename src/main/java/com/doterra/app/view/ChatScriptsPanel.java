@@ -11,6 +11,8 @@ import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
+import javafx.geometry.Bounds;
+import javafx.collections.ObservableList;
 import javafx.scene.control.Alert.AlertType;
 import javafx.stage.StageStyle;
 import javafx.scene.input.MouseButton;
@@ -531,21 +533,24 @@ public class ChatScriptsPanel {
                         
                         // Move button to new position
                         if (!sourceTabId.equals(targetTabId)) {
-                            // Moving between tabs
+                            // Moving between tabs - need to remove from source and add to target
                             buttonController.removeButtonFromTab(sourceTabId, draggedButtonId);
                             buttonController.addButtonToTab(targetTabId, scriptButton);
+                            
+                            // Remove button from source pane
+                            FlowPane sourcePane = (FlowPane) draggedButton.getParent();
+                            sourcePane.getChildren().remove(draggedButton);
+                            
+                            // Create new button for target tab
+                            addButtonToTab(targetTab, scriptButton);
+                        } else {
+                            // Moving within the same tab - just reorder
                             buttonPane.getChildren().remove(draggedButton);
+                            buttonPane.getChildren().add(targetIndex, draggedButton);
+                            
+                            // Update button order in controller
+                            updateButtonOrder(targetTab);
                         }
-                        
-                        // Reorder within the pane
-                        buttonPane.getChildren().remove(draggedButton);
-                        buttonPane.getChildren().add(targetIndex, draggedButton);
-                        
-                        // Update the button's properties for future drags
-                        draggedButton.getProperties().put("sourceTabId", targetTabId);
-                        
-                        // Update button order in controller
-                        updateButtonOrder(targetTab);
                         success = true;
                     }
                 }
@@ -581,20 +586,31 @@ public class ChatScriptsPanel {
         return null;
     }
     
-    private int calculateDropIndex(FlowPane pane, double x, double y) {
-        int index = 0;
-        for (Node node : pane.getChildren()) {
-            if (node instanceof Button) {
-                double nodeX = node.getLayoutX() + node.getBoundsInLocal().getWidth() / 2;
-                double nodeY = node.getLayoutY() + node.getBoundsInLocal().getHeight() / 2;
+    private int calculateDropIndex(FlowPane pane, double dropX, double dropY) {
+        ObservableList<Node> children = pane.getChildren();
+        
+        // If no children, return 0
+        if (children.isEmpty()) {
+            return 0;
+        }
+        
+        // Find insertion point based on drop coordinates
+        for (int i = 0; i < children.size(); i++) {
+            Node child = children.get(i);
+            if (child instanceof Button) {
+                Bounds bounds = child.getBoundsInParent();
+                double centerX = bounds.getMinX() + bounds.getWidth() / 2;
+                double centerY = bounds.getMinY() + bounds.getHeight() / 2;
                 
-                if (y < nodeY || (y <= nodeY + node.getBoundsInLocal().getHeight() && x < nodeX)) {
-                    break;
+                // Check if we should insert before this button
+                if (dropY < centerY || (Math.abs(dropY - centerY) < bounds.getHeight() / 2 && dropX < centerX)) {
+                    return i;
                 }
-                index++;
             }
         }
-        return index;
+        
+        // Drop at the end
+        return children.size();
     }
     
     private void updateTabOrder() {

@@ -2,27 +2,38 @@ package com.doterra.app.model;
 
 import javafx.scene.paint.Color;
 import java.io.Serializable;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.UUID;
 
 public class ScriptButton implements Serializable {
     
+    private static final long serialVersionUID = 1L;
+    
     private String id;
     private String name;
     private String content;
-    private Color color;
+    private transient Color color;
+    
+    // Serializable color components
+    private double red;
+    private double green;
+    private double blue;
+    private double opacity;
     
     public ScriptButton(String name, String content, Color color) {
         this.id = UUID.randomUUID().toString();
         this.name = name;
         this.content = content;
-        this.color = color;
+        setColor(color);
     }
     
     public ScriptButton(ScriptButton other) {
         this.id = UUID.randomUUID().toString();
         this.name = other.name + " (Copy)";
         this.content = other.content;
-        this.color = other.color;
+        setColor(other.getColor());
     }
     
     public String getId() {
@@ -46,10 +57,31 @@ public class ScriptButton implements Serializable {
     }
     
     public Color getColor() {
+        if (color == null && red >= 0 && green >= 0 && blue >= 0 && opacity >= 0) {
+            color = new Color(red, green, blue, opacity);
+        }
         return color;
     }
     
     public void setColor(Color color) {
         this.color = color;
+        if (color != null) {
+            this.red = color.getRed();
+            this.green = color.getGreen();
+            this.blue = color.getBlue();
+            this.opacity = color.getOpacity();
+        }
+    }
+    
+    private void writeObject(ObjectOutputStream out) throws IOException {
+        out.defaultWriteObject();
+    }
+    
+    private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
+        in.defaultReadObject();
+        // Reconstruct color from components
+        if (red >= 0 && green >= 0 && blue >= 0 && opacity >= 0) {
+            this.color = new Color(red, green, blue, opacity);
+        }
     }
 }

@@ -23,6 +23,8 @@ import javafx.scene.input.TransferMode;
 import javafx.scene.input.DragEvent;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.Node;
+import javafx.geometry.Bounds;
+import javafx.collections.ObservableList;
 
 import java.util.Optional;
 import java.util.ArrayList;
@@ -532,15 +534,27 @@ public class EmailScriptsPanel {
                         
                         // Move button to new position
                         if (!sourceTabId.equals(targetTabId)) {
-                            // Moving between tabs
+                            // Moving between tabs - remove from source, create new button in target
                             buttonController.removeButtonFromTab(sourceTabId, draggedButtonId);
-                            buttonController.addButtonToTab(targetTabId, scriptButton);
+                            
+                            // Remove the button from its current parent first
+                            Node parent = draggedButton.getParent();
+                            if (parent instanceof FlowPane) {
+                                ((FlowPane) parent).getChildren().remove(draggedButton);
+                            }
+                            
+                            // Create a new button for the target tab
+                            ScriptButton newButton = new ScriptButton(scriptButton);
+                            buttonController.addButtonToTab(targetTabId, newButton);
+                            
+                            // Create new UI button for the target tab
+                            Tab targetTabRef = targetTab;
+                            addButtonToTab(targetTabRef, newButton);
+                        } else {
+                            // Moving within the same tab - just reorder
                             buttonPane.getChildren().remove(draggedButton);
+                            buttonPane.getChildren().add(targetIndex, draggedButton);
                         }
-                        
-                        // Reorder within the pane
-                        buttonPane.getChildren().remove(draggedButton);
-                        buttonPane.getChildren().add(targetIndex, draggedButton);
                         
                         // Update the button's properties for future drags
                         draggedButton.getProperties().put("sourceTabId", targetTabId);
@@ -583,19 +597,33 @@ public class EmailScriptsPanel {
     }
     
     private int calculateDropIndex(FlowPane pane, double x, double y) {
-        int index = 0;
-        for (Node node : pane.getChildren()) {
+        ObservableList<Node> children = pane.getChildren();
+        int closestIndex = 0;
+        double minDistance = Double.MAX_VALUE;
+        
+        for (int i = 0; i < children.size(); i++) {
+            Node node = children.get(i);
             if (node instanceof Button) {
-                double nodeX = node.getLayoutX() + node.getBoundsInLocal().getWidth() / 2;
-                double nodeY = node.getLayoutY() + node.getBoundsInLocal().getHeight() / 2;
+                Bounds bounds = node.getBoundsInParent();
+                double centerX = bounds.getMinX() + bounds.getWidth() / 2;
+                double centerY = bounds.getMinY() + bounds.getHeight() / 2;
                 
-                if (y < nodeY || (y <= nodeY + node.getBoundsInLocal().getHeight() && x < nodeX)) {
-                    break;
+                // Calculate distance from drop point to button center
+                double distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+                
+                // If drop point is before this button (considering flow layout), use this index
+                if (y < centerY || (Math.abs(y - centerY) < bounds.getHeight() / 2 && x < centerX)) {
+                    return i;
                 }
-                index++;
+                
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestIndex = i + 1; // Insert after this button
+                }
             }
         }
-        return index;
+        
+        return Math.min(closestIndex, children.size());
     }
     
     private void updateTabOrder() {

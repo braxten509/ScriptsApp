@@ -156,6 +156,24 @@ public class CssInspector {
             info.append("\n").append(style);
         }
         
+        // Add layout styling unavailable notice for pure layout containers
+        if (isPureLayoutContainer(nodeType)) {
+            info.append("\n[Layout properties unavailable - use Java code]");
+        }
+        
         return info.toString();
+    }
+    
+    private boolean isPureLayoutContainer(String nodeType) {
+        // These containers have no meaningful CSS styling - only layout behavior
+        return nodeType.equals("BorderPane") || 
+               nodeType.equals("VBox") || 
+               nodeType.equals("HBox") || 
+               nodeType.equals("FlowPane") || 
+               nodeType.equals("GridPane") || 
+               nodeType.equals("StackPane") || 
+               nodeType.equals("AnchorPane") || 
+               nodeType.equals("TilePane");
+        // Note: SplitPane removed as it has CSS-styleable dividers
     }
 }

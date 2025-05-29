@@ -8,7 +8,11 @@
       "Bash(cat:*)",
       "Bash(ls:*)",
       "Bash(sudo cp:*)",
-      "Bash(sudo sed:*)"
+      "Bash(sudo sed:*)",
+      "Bash(mvn clean:*)",
+      "Bash(mvn:*)",
+      "Bash(git add:*)",
+      "Bash(git push:*)"
     ]
   },
   "enableAllProjectMcpServers": false
