@@ -381,12 +381,46 @@ public class ChatScriptsPanel {
             ClipboardContent content = new ClipboardContent();
             content.putString(tab.getId());
             dragboard.setContent(content);
+            
+            // Add visual feedback
+            tab.getStyleClass().add("tab-dragging");
             event.consume();
         });
         
         tabLabel.setOnDragOver(event -> {
             if (event.getGestureSource() != finalTabLabel && event.getDragboard().hasString()) {
                 event.acceptTransferModes(TransferMode.MOVE);
+                // Add visual feedback for drop target
+                if (!tab.getStyleClass().contains("tab-drag-over")) {
+                    tab.getStyleClass().add("tab-drag-over");
+                }
+            }
+            event.consume();
+        });
+        
+        tabLabel.setOnDragEntered(event -> {
+            if (event.getGestureSource() != finalTabLabel && event.getDragboard().hasString()) {
+                tab.getStyleClass().add("tab-drag-over");
+            }
+            event.consume();
+        });
+        
+        tabLabel.setOnDragExited(event -> {
+            tab.getStyleClass().remove("tab-drag-over");
+            event.consume();
+        });
+        
+        tabLabel.setOnDragDone(event -> {
+            // Clean up visual feedback
+            String draggedTabId = event.getDragboard().getString();
+            Tab draggedTab = findTabById(draggedTabId);
+            if (draggedTab != null) {
+                draggedTab.getStyleClass().remove("tab-dragging");
+            }
+            // Also clean up all tabs
+            for (Tab t : tabPane.getTabs()) {
+                t.getStyleClass().remove("tab-drag-over");
+                t.getStyleClass().remove("tab-dragging");
             }
             event.consume();
         });
@@ -404,7 +438,7 @@ public class ChatScriptsPanel {
                     int draggedIndex = tabPane.getTabs().indexOf(draggedTab);
                     int targetIndex = tabPane.getTabs().indexOf(targetTab);
                     
-                    // Reorder tabs
+                    // Animate the movement
                     tabPane.getTabs().remove(draggedTab);
                     tabPane.getTabs().add(targetIndex, draggedTab);
                     
@@ -414,6 +448,8 @@ public class ChatScriptsPanel {
                 }
             }
             
+            // Clean up visual feedback
+            tab.getStyleClass().remove("tab-drag-over");
             event.setDropCompleted(success);
             event.consume();
         });
@@ -431,6 +467,15 @@ public class ChatScriptsPanel {
             if (sourceTab != null) {
                 button.getProperties().put("sourceTabId", sourceTab.getId());
             }
+            
+            // Add visual feedback
+            button.getStyleClass().add("button-dragging");
+            event.consume();
+        });
+        
+        button.setOnDragDone(event -> {
+            // Remove visual feedback
+            button.getStyleClass().remove("button-dragging");
             event.consume();
         });
     }
@@ -440,6 +485,18 @@ public class ChatScriptsPanel {
             if (event.getGestureSource() != buttonPane && event.getDragboard().hasString()) {
                 event.acceptTransferModes(TransferMode.MOVE);
             }
+            event.consume();
+        });
+        
+        buttonPane.setOnDragEntered(event -> {
+            if (event.getGestureSource() != buttonPane && event.getDragboard().hasString()) {
+                buttonPane.getStyleClass().add("button-drag-over");
+            }
+            event.consume();
+        });
+        
+        buttonPane.setOnDragExited(event -> {
+            buttonPane.getStyleClass().remove("button-drag-over");
             event.consume();
         });
         
@@ -494,6 +551,8 @@ public class ChatScriptsPanel {
                 }
             }
             
+            // Clean up visual feedback
+            buttonPane.getStyleClass().remove("button-drag-over");
             event.setDropCompleted(success);
             event.consume();
         });

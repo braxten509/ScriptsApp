@@ -377,22 +377,56 @@ public class EmailScriptsPanel {
         
         final Label finalTabLabel = tabLabel;
         
-        finalTabLabel.setOnDragDetected(event -> {
+        tabLabel.setOnDragDetected(event -> {
             Dragboard dragboard = finalTabLabel.startDragAndDrop(TransferMode.MOVE);
             ClipboardContent content = new ClipboardContent();
             content.putString(tab.getId());
             dragboard.setContent(content);
+            
+            // Add visual feedback
+            tab.getStyleClass().add("tab-dragging");
             event.consume();
         });
         
-        finalTabLabel.setOnDragOver(event -> {
+        tabLabel.setOnDragOver(event -> {
             if (event.getGestureSource() != finalTabLabel && event.getDragboard().hasString()) {
                 event.acceptTransferModes(TransferMode.MOVE);
+                // Add visual feedback for drop target
+                if (!tab.getStyleClass().contains("tab-drag-over")) {
+                    tab.getStyleClass().add("tab-drag-over");
+                }
             }
             event.consume();
         });
         
-        finalTabLabel.setOnDragDropped(event -> {
+        tabLabel.setOnDragEntered(event -> {
+            if (event.getGestureSource() != finalTabLabel && event.getDragboard().hasString()) {
+                tab.getStyleClass().add("tab-drag-over");
+            }
+            event.consume();
+        });
+        
+        tabLabel.setOnDragExited(event -> {
+            tab.getStyleClass().remove("tab-drag-over");
+            event.consume();
+        });
+        
+        tabLabel.setOnDragDone(event -> {
+            // Clean up visual feedback
+            String draggedTabId = event.getDragboard().getString();
+            Tab draggedTab = findTabById(draggedTabId);
+            if (draggedTab != null) {
+                draggedTab.getStyleClass().remove("tab-dragging");
+            }
+            // Also clean up all tabs
+            for (Tab t : tabPane.getTabs()) {
+                t.getStyleClass().remove("tab-drag-over");
+                t.getStyleClass().remove("tab-dragging");
+            }
+            event.consume();
+        });
+        
+        tabLabel.setOnDragDropped(event -> {
             Dragboard dragboard = event.getDragboard();
             boolean success = false;
             
@@ -405,7 +439,7 @@ public class EmailScriptsPanel {
                     int draggedIndex = tabPane.getTabs().indexOf(draggedTab);
                     int targetIndex = tabPane.getTabs().indexOf(targetTab);
                     
-                    // Reorder tabs
+                    // Animate the movement
                     tabPane.getTabs().remove(draggedTab);
                     tabPane.getTabs().add(targetIndex, draggedTab);
                     
@@ -415,6 +449,8 @@ public class EmailScriptsPanel {
                 }
             }
             
+            // Clean up visual feedback
+            tab.getStyleClass().remove("tab-drag-over");
             event.setDropCompleted(success);
             event.consume();
         });
@@ -427,11 +463,20 @@ public class EmailScriptsPanel {
             content.putString(scriptButton.getId());
             dragboard.setContent(content);
             
-            // Store the source tab ID
+            // Store the source tab ID - find the tab containing this button
             Tab sourceTab = findTabContainingButton(button);
             if (sourceTab != null) {
                 button.getProperties().put("sourceTabId", sourceTab.getId());
             }
+            
+            // Add visual feedback
+            button.getStyleClass().add("button-dragging");
+            event.consume();
+        });
+        
+        button.setOnDragDone(event -> {
+            // Remove visual feedback
+            button.getStyleClass().remove("button-dragging");
             event.consume();
         });
     }
@@ -441,6 +486,18 @@ public class EmailScriptsPanel {
             if (event.getGestureSource() != buttonPane && event.getDragboard().hasString()) {
                 event.acceptTransferModes(TransferMode.MOVE);
             }
+            event.consume();
+        });
+        
+        buttonPane.setOnDragEntered(event -> {
+            if (event.getGestureSource() != buttonPane && event.getDragboard().hasString()) {
+                buttonPane.getStyleClass().add("button-drag-over");
+            }
+            event.consume();
+        });
+        
+        buttonPane.setOnDragExited(event -> {
+            buttonPane.getStyleClass().remove("button-drag-over");
             event.consume();
         });
         
@@ -458,12 +515,11 @@ public class EmailScriptsPanel {
                     
                     // Get target tab
                     Tab targetTab = findTabContainingPane(buttonPane);
-                    if (targetTab == null) {
-                        event.setDropCompleted(false);
-                        event.consume();
+                    String targetTabId = targetTab != null ? targetTab.getId() : null;
+                    
+                    if (targetTabId == null) {
                         return;
                     }
-                    String targetTabId = targetTab.getId();
                     
                     // Find the script button
                     ScriptButton scriptButton = findScriptButton(sourceTabId, draggedButtonId);
@@ -496,6 +552,8 @@ public class EmailScriptsPanel {
                 }
             }
             
+            // Clean up visual feedback
+            buttonPane.getStyleClass().remove("button-drag-over");
             event.setDropCompleted(success);
             event.consume();
         });
