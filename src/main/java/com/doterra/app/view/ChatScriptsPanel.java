@@ -881,6 +881,11 @@ public class ChatScriptsPanel {
             if (e.getDragboard().hasString() && !"addTab".equals(tab.getId())) {
                 e.acceptTransferModes(TransferMode.MOVE);
                 tabLabel.setStyle("-fx-background-color: #e0e0e0; -fx-background-radius: 3px;");
+                
+                // Automatically switch to this tab when dragging over it
+                if (!tabPane.getSelectionModel().getSelectedItem().equals(tab)) {
+                    tabPane.getSelectionModel().select(tab);
+                }
             }
             e.consume();
         });
