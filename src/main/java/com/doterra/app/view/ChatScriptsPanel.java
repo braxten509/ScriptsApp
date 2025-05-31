@@ -618,7 +618,7 @@ public class ChatScriptsPanel {
             if (!name.trim().isEmpty()) {
                 Tab selectedTab = tabPane.getSelectionModel().getSelectedItem();
                 if (selectedTab != null && !"addTab".equals(selectedTab.getId())) {
-                    ScriptButton newButton = new ScriptButton(name, textArea.getText(), Color.LIGHTBLUE);
+                    ScriptButton newButton = new ScriptButton(name, textArea.getText(), Color.GRAY);
                     buttonController.addButtonToTab(selectedTab.getId(), newButton);
                     addButtonToTab(selectedTab, newButton);
                     buttonController.saveState();
@@ -891,14 +891,42 @@ public class ChatScriptsPanel {
         // Add padding to ensure good click area for drag-and-drop
         tabLabel.setPadding(new Insets(8, 16, 8, 16));
         
+        // Enable tab dragging for reordering
+        tabLabel.setOnDragDetected(e -> {
+            if (e.getButton() == MouseButton.PRIMARY && !"addTab".equals(tab.getId())) {
+                Dragboard dragboard = tabLabel.startDragAndDrop(TransferMode.MOVE);
+                ClipboardContent content = new ClipboardContent();
+                content.putString("TAB:" + tab.getId()); // Prefix with TAB: to distinguish from button drags
+                dragboard.setContent(content);
+                
+                // Add visual feedback
+                tabLabel.setStyle("-fx-background-color: #b0b0b0; -fx-background-radius: 3px;");
+                e.consume();
+            }
+        });
+        
+        tabLabel.setOnDragDone(e -> {
+            tabLabel.setStyle("");
+            e.consume();
+        });
+        
         tabLabel.setOnDragOver(e -> {
             if (e.getDragboard().hasString() && !"addTab".equals(tab.getId())) {
-                e.acceptTransferModes(TransferMode.MOVE);
-                tabLabel.setStyle("-fx-background-color: #e0e0e0; -fx-background-radius: 3px;");
+                String dragData = e.getDragboard().getString();
                 
-                // Automatically switch to this tab when dragging over it
-                if (!tabPane.getSelectionModel().getSelectedItem().equals(tab)) {
-                    tabPane.getSelectionModel().select(tab);
+                if (dragData.startsWith("TAB:")) {
+                    // Tab reordering - show different visual feedback
+                    e.acceptTransferModes(TransferMode.MOVE);
+                    tabLabel.setStyle("-fx-background-color: #90CAF9; -fx-background-radius: 3px; -fx-border-color: #2196F3; -fx-border-width: 0 0 3 0;");
+                } else {
+                    // Button dropping - existing behavior
+                    e.acceptTransferModes(TransferMode.MOVE);
+                    tabLabel.setStyle("-fx-background-color: #e0e0e0; -fx-background-radius: 3px;");
+                    
+                    // Automatically switch to this tab when dragging over it
+                    if (!tabPane.getSelectionModel().getSelectedItem().equals(tab)) {
+                        tabPane.getSelectionModel().select(tab);
+                    }
                 }
             }
             e.consume();
@@ -914,27 +942,37 @@ public class ChatScriptsPanel {
             boolean success = false;
             if (db.hasString()) {
                 String dragData = db.getString();
-                String[] parts = dragData.split(":");
-                String draggedButtonId = parts[0];
-                String sourceTabId = parts.length > 1 ? parts[1] : null;
                 
-                // Only process if this is a different tab
-                if (sourceTabId != null && !sourceTabId.equals(tab.getId())) {
-                    ScriptButton draggedScriptButton = buttonController.getButton(sourceTabId, draggedButtonId);
-                    if (draggedScriptButton != null) {
-                        // Move button to new tab
-                        if (buttonController.moveButtonBetweenTabs(sourceTabId, tab.getId(), draggedButtonId)) {
-                            // Remove button from source tab UI
-                            removeButtonFromTabUI(sourceTabId, draggedButtonId);
-                            
-                            // Add button to target tab
-                            addButtonToTab(tab, draggedScriptButton);
-                            
-                            // Switch to the target tab
-                            tabPane.getSelectionModel().select(tab);
-                            
-                            success = true;
-                            buttonController.saveState();
+                if (dragData.startsWith("TAB:")) {
+                    // Tab reordering
+                    String draggedTabId = dragData.substring(4); // Remove "TAB:" prefix
+                    if (!draggedTabId.equals(tab.getId())) {
+                        success = reorderTabs(draggedTabId, tab.getId());
+                    }
+                } else {
+                    // Button dropping - existing behavior
+                    String[] parts = dragData.split(":");
+                    String draggedButtonId = parts[0];
+                    String sourceTabId = parts.length > 1 ? parts[1] : null;
+                    
+                    // Only process if this is a different tab
+                    if (sourceTabId != null && !sourceTabId.equals(tab.getId())) {
+                        ScriptButton draggedScriptButton = buttonController.getButton(sourceTabId, draggedButtonId);
+                        if (draggedScriptButton != null) {
+                            // Move button to new tab
+                            if (buttonController.moveButtonBetweenTabs(sourceTabId, tab.getId(), draggedButtonId)) {
+                                // Remove button from source tab UI
+                                removeButtonFromTabUI(sourceTabId, draggedButtonId);
+                                
+                                // Add button to target tab
+                                addButtonToTab(tab, draggedScriptButton);
+                                
+                                // Switch to the target tab
+                                tabPane.getSelectionModel().select(tab);
+                                
+                                success = true;
+                                buttonController.saveState();
+                            }
                         }
                     }
                 }
@@ -972,5 +1010,54 @@ public class ChatScriptsPanel {
     
     public void setTextAreaContent(String content) {
         textArea.setText(content);
+    }
+    
+    /**
+     * Reorders tabs by moving the dragged tab to the position of the target tab.
+     * 
+     * @param draggedTabId ID of the tab being dragged
+     * @param targetTabId ID of the tab being dropped on
+     * @return true if reordering was successful
+     */
+    private boolean reorderTabs(String draggedTabId, String targetTabId) {
+        try {
+            // Find current positions
+            int draggedIndex = -1;
+            int targetIndex = -1;
+            
+            for (int i = 0; i < tabPane.getTabs().size(); i++) {
+                Tab tab = tabPane.getTabs().get(i);
+                if (draggedTabId.equals(tab.getId())) {
+                    draggedIndex = i;
+                }
+                if (targetTabId.equals(tab.getId())) {
+                    targetIndex = i;
+                }
+            }
+            
+            if (draggedIndex != -1 && targetIndex != -1 && draggedIndex != targetIndex) {
+                // Remove the dragged tab and insert it at the target position
+                Tab draggedTab = tabPane.getTabs().remove(draggedIndex);
+                
+                // Adjust target index if we removed a tab before it
+                if (draggedIndex < targetIndex) {
+                    targetIndex--;
+                }
+                
+                tabPane.getTabs().add(targetIndex, draggedTab);
+                
+                // Update the button controller tab order
+                buttonController.reorderTabs(draggedTabId, targetTabId);
+                buttonController.saveState();
+                
+                // Keep the dragged tab selected
+                tabPane.getSelectionModel().select(draggedTab);
+                
+                return true;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return false;
     }
 }

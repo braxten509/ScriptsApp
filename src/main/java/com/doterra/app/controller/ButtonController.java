@@ -129,6 +129,56 @@ public class ButtonController {
         }
     }
     
+    /**
+     * Reorders tabs by moving the dragged tab to the position of the target tab.
+     * 
+     * @param draggedTabId ID of the tab being moved
+     * @param targetTabId ID of the tab to move next to
+     * @return true if reordering was successful
+     */
+    public boolean reorderTabs(String draggedTabId, String targetTabId) {
+        ButtonTab draggedTab = tabs.get(draggedTabId);
+        ButtonTab targetTab = tabs.get(targetTabId);
+        
+        if (draggedTab == null || targetTab == null) {
+            return false;
+        }
+        
+        // Create new ordered list
+        List<ButtonTab> tabList = new ArrayList<>(tabs.values());
+        
+        // Find current positions
+        int draggedIndex = -1;
+        int targetIndex = -1;
+        
+        for (int i = 0; i < tabList.size(); i++) {
+            if (tabList.get(i).getId().equals(draggedTabId)) {
+                draggedIndex = i;
+            }
+            if (tabList.get(i).getId().equals(targetTabId)) {
+                targetIndex = i;
+            }
+        }
+        
+        if (draggedIndex != -1 && targetIndex != -1 && draggedIndex != targetIndex) {
+            // Remove and reinsert at new position
+            ButtonTab removedTab = tabList.remove(draggedIndex);
+            
+            // Adjust target index if we removed a tab before it
+            if (draggedIndex < targetIndex) {
+                targetIndex--;
+            }
+            
+            tabList.add(targetIndex, removedTab);
+            
+            // Update the tabs map with new order
+            reorderTabs(tabList);
+            return true;
+        }
+        
+        return false;
+    }
+    
     public Map<String, ButtonTab> getTabs() {
         // Return tabs indexed by name for test compatibility
         Map<String, ButtonTab> tabsByName = new LinkedHashMap<>();
