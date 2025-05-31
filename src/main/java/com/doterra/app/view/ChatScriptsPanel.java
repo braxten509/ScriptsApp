@@ -82,20 +82,30 @@ public class ChatScriptsPanel {
         
         // Click handler to deselect buttons when clicking outside
         root.addEventFilter(MouseEvent.MOUSE_CLICKED, e -> {
-            // Check if the target or any of its parents is a button
+            // Check if the target or any of its parents is a button or text area
             Node target = e.getPickResult().getIntersectedNode();
             boolean isButton = false;
+            boolean isTextArea = false;
             
             while (target != null) {
                 if (target instanceof Button && target.getStyleClass().contains("script-button")) {
                     isButton = true;
                     break;
                 }
+                if (target == textArea || target.getParent() == textArea) {
+                    isTextArea = true;
+                    break;
+                }
+                // Check for text area's internal components
+                if (target.getClass().getSimpleName().contains("TextArea")) {
+                    isTextArea = true;
+                    break;
+                }
                 target = target.getParent();
             }
             
-            // Only clear selection if we didn't click on a script button
-            if (!isButton) {
+            // Only clear selection if we didn't click on a script button or text area
+            if (!isButton && !isTextArea) {
                 clearButtonSelection();
                 selectedButton = null;
                 textArea.clear();

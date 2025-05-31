@@ -83,20 +83,31 @@ public class EmailScriptsPanel {
         
         // Click handler to deselect buttons when clicking outside
         root.addEventFilter(MouseEvent.MOUSE_CLICKED, e -> {
-            // Check if the target or any of its parents is a button
+            // Check if the target or any of its parents is a button or HTML editor
             Node target = e.getPickResult().getIntersectedNode();
             boolean isButton = false;
+            boolean isHtmlEditor = false;
             
             while (target != null) {
                 if (target instanceof Button && target.getStyleClass().contains("script-button")) {
                     isButton = true;
                     break;
                 }
+                if (target == htmlEditor || target.getParent() == htmlEditor) {
+                    isHtmlEditor = true;
+                    break;
+                }
+                // Check for HTML editor's internal web view
+                if (target.getClass().getSimpleName().contains("WebView") || 
+                    target.getClass().getSimpleName().contains("HTMLEditor")) {
+                    isHtmlEditor = true;
+                    break;
+                }
                 target = target.getParent();
             }
             
-            // Only clear selection if we didn't click on a script button
-            if (!isButton) {
+            // Only clear selection if we didn't click on a script button or HTML editor
+            if (!isButton && !isHtmlEditor) {
                 clearButtonSelection();
                 selectedButton = null;
                 htmlEditor.setHtmlText("");
@@ -258,9 +269,11 @@ public class EmailScriptsPanel {
             selectedButton = scriptButton;
             htmlEditor.setHtmlText(scriptButton.getContent());
             
-            // Copy to clipboard
+            // Copy to clipboard as HTML for email clients
             ClipboardContent content = new ClipboardContent();
-            content.putString(scriptButton.getContent());
+            content.putHtml(scriptButton.getContent());
+            // Also provide plain text version for compatibility
+            content.putString(scriptButton.getContent().replaceAll("<[^>]*>", ""));
             Clipboard.getSystemClipboard().setContent(content);
             
             // Visual feedback for selection
