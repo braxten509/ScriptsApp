@@ -70,17 +70,12 @@
 /* Script Buttons */
 .script-button {
     -fx-padding: 10;
-    -fx-pref-width: 120;
-    -fx-pref-height: 50;
-    -fx-min-width: 120;
-    -fx-min-height: 50;
-    -fx-max-width: 120;
-    -fx-max-height: 50;
     -fx-background-radius: 5;
     -fx-border-radius: 5;
     -fx-wrap-text: true;
     -fx-cursor: hand;
     -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.15), 3, 0, 0, 1);
+    -fx-text-alignment: center;
 }
 
 .script-button:hover {
@@ -129,5 +124,4 @@
 .drop-indicator {
     -fx-background-color: #2196F3;
     -fx-pref-width: 3;
-    -fx-pref-height: 50;
 }

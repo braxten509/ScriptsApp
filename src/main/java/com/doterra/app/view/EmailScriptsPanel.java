@@ -59,6 +59,7 @@ public class EmailScriptsPanel {
         setupTabsFromController();
         
         VBox centerSection = new VBox(5, controls, tabPane);
+        VBox.setVgrow(tabPane, Priority.ALWAYS); // Make tabPane expand to fill available space
         root.setCenter(centerSection);
         root.setBottom(htmlEditor);
         
@@ -113,24 +114,28 @@ public class EmailScriptsPanel {
         buttonGrid.setHgap(5);
         buttonGrid.setVgap(5);
         
-        // Configure grid columns and rows for 6x6
+        // Configure grid columns and rows for 6x6 with responsive sizing
         for (int i = 0; i < 6; i++) {
             ColumnConstraints col = new ColumnConstraints();
-            col.setMinWidth(120);
-            col.setPrefWidth(120);
-            col.setMaxWidth(120);
+            col.setPercentWidth(100.0 / 6); // Each column takes 1/6 of the width
+            col.setHgrow(Priority.ALWAYS);
+            col.setFillWidth(true);
             buttonGrid.getColumnConstraints().add(col);
             
             RowConstraints row = new RowConstraints();
-            row.setMinHeight(50);
-            row.setPrefHeight(50);
-            row.setMaxHeight(50);
+            row.setPercentHeight(100.0 / 6); // Each row takes 1/6 of the height
+            row.setVgrow(Priority.ALWAYS);
+            row.setFillHeight(true);
             buttonGrid.getRowConstraints().add(row);
         }
         
         ScrollPane scrollPane = new ScrollPane(buttonGrid);
         scrollPane.setFitToWidth(true);
         scrollPane.setFitToHeight(true);
+        
+        // Make grid pane fill the entire scroll pane
+        buttonGrid.prefWidthProperty().bind(scrollPane.widthProperty());
+        buttonGrid.prefHeightProperty().bind(scrollPane.heightProperty());
         
         tab.setContent(scrollPane);
         
@@ -156,6 +161,9 @@ public class EmailScriptsPanel {
             if (row >= 6) break; // Don't exceed 6x6 grid
             
             Button button = createButtonUI(scriptButton);
+            
+            // No need to bind height here, let grid constraints handle it
+            
             setupButtonDragAndDrop(button, scriptButton);
             setupButtonContextMenu(button, scriptButton, tab);
             
@@ -181,6 +189,9 @@ public class EmailScriptsPanel {
         int col = nextPosition % 6;
         
         Button button = createButtonUI(scriptButton);
+        
+        // No need to bind height here, let grid constraints handle it
+        
         setupButtonDragAndDrop(button, scriptButton);
         setupButtonContextMenu(button, scriptButton, tab);
         
@@ -190,7 +201,7 @@ public class EmailScriptsPanel {
     private Button createButtonUI(ScriptButton scriptButton) {
         Button button = new Button(scriptButton.getName());
         button.getStyleClass().add("script-button");
-        button.setPrefSize(120, 50);
+        button.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE); // Allow button to grow
         button.setWrapText(true);
         button.setUserData(scriptButton); // Store script button reference for drag-and-drop
         
@@ -319,11 +330,14 @@ public class EmailScriptsPanel {
         grid.setOnDragOver(e -> {
             if (e.getDragboard().hasString()) {
                 // Calculate which grid cell the mouse is over
-                double cellWidth = grid.getWidth() / 6;
-                double cellHeight = grid.getHeight() / 6;
+                double cellWidth = (grid.getWidth() - grid.getPadding().getLeft() - grid.getPadding().getRight() - (5 * grid.getHgap())) / 6;
+                double cellHeight = (grid.getHeight() - grid.getPadding().getTop() - grid.getPadding().getBottom() - (5 * grid.getVgap())) / 6;
                 
-                int col = (int) (e.getX() / cellWidth);
-                int row = (int) (e.getY() / cellHeight);
+                double adjustedX = e.getX() - grid.getPadding().getLeft();
+                double adjustedY = e.getY() - grid.getPadding().getTop();
+                
+                int col = (int) (adjustedX / (cellWidth + grid.getHgap()));
+                int row = (int) (adjustedY / (cellHeight + grid.getVgap()));
                 
                 // Check if this position is empty
                 if (col >= 0 && col < 6 && row >= 0 && row < 6 && isGridCellEmpty(grid, col, row)) {
@@ -342,11 +356,14 @@ public class EmailScriptsPanel {
                 
                 if (draggedButton != null) {
                     // Calculate target cell
-                    double cellWidth = grid.getWidth() / 6;
-                    double cellHeight = grid.getHeight() / 6;
+                    double cellWidth = (grid.getWidth() - grid.getPadding().getLeft() - grid.getPadding().getRight() - (5 * grid.getHgap())) / 6;
+                    double cellHeight = (grid.getHeight() - grid.getPadding().getTop() - grid.getPadding().getBottom() - (5 * grid.getVgap())) / 6;
                     
-                    int targetCol = Math.max(0, Math.min(5, (int) (e.getX() / cellWidth)));
-                    int targetRow = Math.max(0, Math.min(5, (int) (e.getY() / cellHeight)));
+                    double adjustedX = e.getX() - grid.getPadding().getLeft();
+                    double adjustedY = e.getY() - grid.getPadding().getTop();
+                    
+                    int targetCol = Math.max(0, Math.min(5, (int) (adjustedX / (cellWidth + grid.getHgap()))));
+                    int targetRow = Math.max(0, Math.min(5, (int) (adjustedY / (cellHeight + grid.getVgap()))));
                     
                     // Only move if target cell is empty
                     if (isGridCellEmpty(grid, targetCol, targetRow)) {
@@ -476,8 +493,22 @@ public class EmailScriptsPanel {
         
         Optional<String> result = dialog.showAndWait();
         result.ifPresent(name -> {
-            if (!name.trim().isEmpty()) {
-                ButtonTab newTab = new ButtonTab(name);
+            String trimmedName = name.trim();
+            if (!trimmedName.isEmpty()) {
+                if (buttonController.isTabNameDuplicate(trimmedName)) {
+                    // Show error dialog for duplicate name
+                    Alert alert = new Alert(Alert.AlertType.ERROR);
+                    alert.setTitle("Duplicate Tab Name");
+                    alert.setHeaderText("Tab name already exists");
+                    alert.setContentText("A tab with the name '" + trimmedName + "' already exists. Please choose a different name.");
+                    alert.showAndWait();
+                    
+                    // Recursively show the dialog again
+                    showAddTabDialog();
+                    return;
+                }
+                
+                ButtonTab newTab = new ButtonTab(trimmedName);
                 buttonController.addTab(newTab);
                 
                 // Remove the "+" tab temporarily
@@ -579,12 +610,27 @@ public class EmailScriptsPanel {
         
         Optional<String> result = dialog.showAndWait();
         result.ifPresent(name -> {
-            if (!name.trim().isEmpty()) {
+            String trimmedName = name.trim();
+            if (!trimmedName.isEmpty()) {
                 ButtonTab buttonTab = buttonController.getTab(tab.getId());
                 if (buttonTab != null) {
-                    buttonTab.setName(name);
-                    tab.setText(name);
-                    ((Label) tab.getGraphic()).setText(name);
+                    // Check for duplicate name, excluding the current tab
+                    if (buttonController.isTabNameDuplicate(trimmedName, buttonTab.getId())) {
+                        // Show error dialog for duplicate name
+                        Alert alert = new Alert(Alert.AlertType.ERROR);
+                        alert.setTitle("Duplicate Tab Name");
+                        alert.setHeaderText("Tab name already exists");
+                        alert.setContentText("A tab with the name '" + trimmedName + "' already exists. Please choose a different name.");
+                        alert.showAndWait();
+                        
+                        // Recursively show the dialog again
+                        showRenameTabDialog(tab);
+                        return;
+                    }
+                    
+                    buttonTab.setName(trimmedName);
+                    tab.setText(trimmedName);
+                    ((Label) tab.getGraphic()).setText(trimmedName);
                     buttonController.saveState();
                 }
             }
