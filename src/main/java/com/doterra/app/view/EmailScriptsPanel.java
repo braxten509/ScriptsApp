@@ -32,6 +32,7 @@ public class EmailScriptsPanel {
     private ScriptButton selectedButton;
     private String originalContent; // Track original content for change detection
     private boolean contentChanged; // Flag to track if content has been modified
+    private boolean isVariableReplacement; // Flag to track if current content change is from variable replacement
     
     public EmailScriptsPanel() {
         root = new BorderPane();
@@ -122,6 +123,7 @@ public class EmailScriptsPanel {
                     htmlEditor.setHtmlText("");
                     originalContent = null;
                     contentChanged = false;
+                    isVariableReplacement = false;
                 }
             }
         });
@@ -297,10 +299,14 @@ public class EmailScriptsPanel {
                 }
             }
             
+            // Set flag to indicate this content change is from variable replacement
+            isVariableReplacement = true;
             htmlEditor.setHtmlText(processedContent);
             // Store original content for change detection
             this.originalContent = scriptButton.getContent();
             this.contentChanged = false;
+            // Reset the flag after content is set
+            isVariableReplacement = false;
             
             // Copy to clipboard as HTML for email clients
             ClipboardContent content = new ClipboardContent();
@@ -1120,7 +1126,10 @@ public class EmailScriptsPanel {
         if (selectedButton != null && originalContent != null) {
             // Manually check if content has changed since HTMLEditor doesn't have property listener
             String currentContent = htmlEditor.getHtmlText();
-            contentChanged = !originalContent.equals(currentContent);
+            // Don't mark as changed if this is from variable replacement
+            if (!isVariableReplacement) {
+                contentChanged = !originalContent.equals(currentContent);
+            }
         }
         
         if (selectedButton != null && contentChanged && originalContent != null) {

@@ -30,6 +30,7 @@ public class ChatScriptsPanel {
     private ScriptButton selectedButton;
     private String originalContent; // Track original content for change detection
     private boolean contentChanged; // Flag to track if content has been modified
+    private boolean isVariableReplacement; // Flag to track if current text change is from variable replacement
     
     public ChatScriptsPanel() {
         root = new BorderPane();
@@ -55,7 +56,10 @@ public class ChatScriptsPanel {
         // Add text change listener to track modifications
         textArea.textProperty().addListener((observable, oldValue, newValue) -> {
             if (selectedButton != null && originalContent != null) {
-                contentChanged = !originalContent.equals(newValue);
+                // Don't mark as changed if this is from variable replacement
+                if (!isVariableReplacement) {
+                    contentChanged = !originalContent.equals(newValue);
+                }
             }
         });
         
@@ -123,6 +127,7 @@ public class ChatScriptsPanel {
                     textArea.clear();
                     originalContent = null;
                     contentChanged = false;
+                    isVariableReplacement = false;
                 }
             }
         });
@@ -298,10 +303,14 @@ public class ChatScriptsPanel {
                 }
             }
             
+            // Set flag to indicate this text change is from variable replacement
+            isVariableReplacement = true;
             textArea.setText(processedContent);
             // Store original content for change detection
             this.originalContent = scriptButton.getContent();
             this.contentChanged = false;
+            // Reset the flag after text is set
+            isVariableReplacement = false;
             
             // Copy to clipboard
             ClipboardContent content = new ClipboardContent();
