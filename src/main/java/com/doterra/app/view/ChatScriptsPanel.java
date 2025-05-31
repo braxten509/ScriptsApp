@@ -111,7 +111,7 @@ public class ChatScriptsPanel {
         }
         
         // Add the "+" tab for creating new tabs
-        Tab addTab = new Tab("+");
+        Tab addTab = new Tab(); // Don't set text to avoid duplicate "+"
         addTab.setId("addTab");
         addTab.setClosable(false);
         
@@ -556,12 +556,13 @@ public class ChatScriptsPanel {
         
         contextMenu.getItems().addAll(renameItem, deleteItem);
         
-        // Create a wider label that takes up more space in the tab header
+        // Create a label that sizes to its content
         Label tabLabel = new Label(buttonTab.getName()); // Use ButtonTab name, not tab text
         tabLabel.setContextMenu(contextMenu);
-        tabLabel.setMinWidth(80); // Ensure minimum width
-        tabLabel.setPrefWidth(120); // Preferred width
-        tabLabel.setMaxWidth(Double.MAX_VALUE); // Allow expansion
+        // Remove fixed widths to allow proportional sizing based on text content
+        tabLabel.setMinWidth(Region.USE_COMPUTED_SIZE);
+        tabLabel.setPrefWidth(Region.USE_COMPUTED_SIZE);
+        tabLabel.setMaxWidth(Region.USE_COMPUTED_SIZE);
         
         // Add drag-and-drop support to the label (which will now be larger)
         setupTabHeaderDragAndDrop(tabLabel, tab);
@@ -851,8 +852,8 @@ public class ChatScriptsPanel {
     }
     
     private void setupTabHeaderDragAndDrop(Label tabLabel, Tab tab) {
-        // Add padding to make the label larger and more responsive to drops
-        tabLabel.setPadding(new Insets(8, 12, 8, 12));
+        // Add padding to ensure good click area for drag-and-drop
+        tabLabel.setPadding(new Insets(8, 16, 8, 16));
         
         tabLabel.setOnDragOver(e -> {
             if (e.getDragboard().hasString() && !"addTab".equals(tab.getId())) {
