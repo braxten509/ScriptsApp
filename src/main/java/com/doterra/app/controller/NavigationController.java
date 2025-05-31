@@ -4,6 +4,7 @@ import com.doterra.app.view.ChatScriptsPanel;
 import com.doterra.app.view.EmailScriptsPanel;
 import com.doterra.app.view.RegexEditorPanel;
 import com.doterra.app.view.CalculatorPanel;
+import com.doterra.app.view.TodoPanel;
 import javafx.scene.layout.BorderPane;
 
 public class NavigationController {
@@ -13,17 +14,20 @@ public class NavigationController {
     private final EmailScriptsPanel emailScriptsPanel;
     private final RegexEditorPanel regexEditorPanel;
     private final CalculatorPanel calculatorPanel;
+    private final TodoPanel todoPanel;
     
     public NavigationController(BorderPane mainContainer, 
                                ChatScriptsPanel chatScriptsPanel,
                                EmailScriptsPanel emailScriptsPanel,
                                RegexEditorPanel regexEditorPanel,
-                               CalculatorPanel calculatorPanel) {
+                               CalculatorPanel calculatorPanel,
+                               TodoPanel todoPanel) {
         this.mainContainer = mainContainer;
         this.chatScriptsPanel = chatScriptsPanel;
         this.emailScriptsPanel = emailScriptsPanel;
         this.regexEditorPanel = regexEditorPanel;
         this.calculatorPanel = calculatorPanel;
+        this.todoPanel = todoPanel;
     }
     
     public void showPanel(String panelId) {
@@ -39,6 +43,9 @@ public class NavigationController {
                 break;
             case "calculator":
                 mainContainer.setCenter(calculatorPanel);
+                break;
+            case "todo":
+                mainContainer.setCenter(todoPanel);
                 break;
             default:
                 // Default to chat scripts panel

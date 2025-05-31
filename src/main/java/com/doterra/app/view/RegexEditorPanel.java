@@ -17,6 +17,7 @@ import java.io.*;
 import javafx.util.StringConverter;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 
 public class RegexEditorPanel extends BorderPane {
     private static final String TEMPLATES_FILE = "regex_templates.dat";
@@ -109,7 +110,18 @@ public class RegexEditorPanel extends BorderPane {
         // Left side: Patterns table
         VBox patternsSection = new VBox(5);
         patternsSection.setPadding(new Insets(5));
-        Label patternsLabel = new Label("Regex Patterns:");
+        
+        // Pattern buttons header (replacing "Regex Patterns:" label)
+        HBox patternButtons = new HBox(5);
+        patternButtons.setAlignment(Pos.CENTER_LEFT);
+        Button addPatternBtn = new Button("Add Pattern");
+        Button removePatternBtn = new Button("Remove");
+        // Make buttons same size as help button
+        addPatternBtn.setStyle("-fx-font-size: 12px; -fx-padding: 2 6 2 6;");
+        removePatternBtn.setStyle("-fx-font-size: 12px; -fx-padding: 2 6 2 6;");
+        addPatternBtn.setOnAction(e -> addPattern());
+        removePatternBtn.setOnAction(e -> removeSelectedPattern());
+        patternButtons.getChildren().addAll(addPatternBtn, removePatternBtn);
         
         patternsTable = new TableView<>(patterns);
         patternsTable.setEditable(true);
@@ -128,14 +140,7 @@ public class RegexEditorPanel extends BorderPane {
         patternsTable.getColumns().addAll(nameCol, patternCol);
         VBox.setVgrow(patternsTable, Priority.ALWAYS);
         
-        HBox patternButtons = new HBox(5);
-        Button addPatternBtn = new Button("Add Pattern");
-        Button removePatternBtn = new Button("Remove");
-        addPatternBtn.setOnAction(e -> addPattern());
-        removePatternBtn.setOnAction(e -> removeSelectedPattern());
-        patternButtons.getChildren().addAll(addPatternBtn, removePatternBtn);
-        
-        patternsSection.getChildren().addAll(patternsLabel, patternsTable, patternButtons);
+        patternsSection.getChildren().addAll(patternButtons, patternsTable);
         
         // Right side: Template editor
         VBox templateSection = new VBox(5);
@@ -162,19 +167,27 @@ public class RegexEditorPanel extends BorderPane {
         VBox bottomSection = new VBox(5);
         bottomSection.setPadding(new Insets(10, 0, 0, 0));
         
-        HBox controls = new HBox(10);
+        // Output header with buttons on the right
+        HBox outputHeader = new HBox(10);
+        outputHeader.setAlignment(Pos.CENTER_LEFT);
+        Label outputLabel = new Label("Output:");
+        
+        // Spacer to push buttons to the right
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        
         Button processBtn = new Button("Process");
         Button clearBtn = new Button("Clear Output");
         processBtn.setOnAction(e -> processTemplate());
         clearBtn.setOnAction(e -> outputArea.clear());
-        controls.getChildren().addAll(processBtn, clearBtn);
         
-        Label outputLabel = new Label("Output:");
+        outputHeader.getChildren().addAll(outputLabel, spacer, processBtn, clearBtn);
+        
         outputArea = new TextArea();
         outputArea.setPrefRowCount(8);
         outputArea.setEditable(false);
         
-        bottomSection.getChildren().addAll(controls, outputLabel, outputArea);
+        bottomSection.getChildren().addAll(outputHeader, outputArea);
         
         // Layout
         setTop(topSection);
