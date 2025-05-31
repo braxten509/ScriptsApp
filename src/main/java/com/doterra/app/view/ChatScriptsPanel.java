@@ -6,6 +6,7 @@ import com.doterra.app.model.ScriptButton;
 import com.doterra.app.util.ColorUtil;
 import com.doterra.app.util.SimpleStyler;
 import com.doterra.app.util.ComplexStyler;
+import com.doterra.app.util.HoverManager;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -217,6 +218,9 @@ public class ChatScriptsPanel {
         // Set button color
         ComplexStyler.applyButtonColor(button, scriptButton);
         
+        // Apply custom hover effects that work with drag-and-drop
+        HoverManager.applyHoverEffects(button);
+        
         // Button click action
         button.setOnAction(e -> {
             selectedButton = scriptButton;
@@ -248,6 +252,9 @@ public class ChatScriptsPanel {
                 WritableImage snapshot = button.snapshot(new SnapshotParameters(), null);
                 dragboard.setDragView(snapshot, e.getX(), e.getY());
                 
+                // Mark as dragging
+                button.getProperties().put("isDragging", true);
+                
                 // Add visual feedback
                 ComplexStyler.applyDragStartVisuals(button);
                 e.consume();
@@ -256,27 +263,7 @@ public class ChatScriptsPanel {
         
         button.setOnDragDone(e -> {
             ComplexStyler.applyDragEndVisuals(button);
-            
-            // Force JavaFX to re-evaluate hover states by simulating mouse movement
-            javafx.application.Platform.runLater(() -> {
-                // Get the scene and current mouse position
-                if (button.getScene() != null) {
-                    double mouseX = e.getScreenX();
-                    double mouseY = e.getScreenY();
-                    
-                    // Convert screen coordinates to scene coordinates
-                    javafx.geometry.Point2D sceneCoords = button.getScene().getRoot().screenToLocal(mouseX, mouseY);
-                    
-                    // Fire a mouse moved event on the scene to trigger hover detection
-                    MouseEvent moveEvent = new MouseEvent(MouseEvent.MOUSE_MOVED,
-                        sceneCoords.getX(), sceneCoords.getY(), mouseX, mouseY,
-                        MouseButton.NONE, 0, false, false, false, false,
-                        false, false, false, false, false, false, null);
-                    
-                    button.getScene().getRoot().fireEvent(moveEvent);
-                }
-            });
-            
+            HoverManager.endDrag(button);
             e.consume();
         });
         
@@ -749,6 +736,10 @@ public class ChatScriptsPanel {
         alert.setHeaderText(null);
         alert.setContentText(message);
         alert.showAndWait();
+    }
+    
+    private Tab getCurrentTab() {
+        return tabPane.getSelectionModel().getSelectedItem();
     }
     
     // Public methods for testing and external access

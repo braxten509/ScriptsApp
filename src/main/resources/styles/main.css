@@ -78,11 +78,12 @@
     -fx-text-alignment: center;
 }
 
-.script-button:hover {
+/* Hover effects handled programmatically to fix drag-and-drop issues */
+/* .script-button:hover {
     -fx-scale-x: 1.05;
     -fx-scale-y: 1.05;
     -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 8, 0, 0, 3);
-}
+} */
 
 .script-button:pressed {
     -fx-scale-x: 0.98;

@@ -73,6 +73,62 @@ public class ComplexStyler {
         }
     }
     
+    // Programmatic hover effects for script buttons
+    public static void applyScriptButtonHoverEffects(Button button) {
+        // Store default effect
+        javafx.scene.effect.Effect defaultEffect = new javafx.scene.effect.DropShadow(
+            javafx.scene.effect.BlurType.GAUSSIAN,
+            javafx.scene.paint.Color.rgb(0, 0, 0, 0.15),
+            3, 0, 0, 1
+        );
+        button.setEffect(defaultEffect);
+        
+        // Create hover handler that tracks state properly
+        button.addEventHandler(javafx.scene.input.MouseEvent.ANY, e -> {
+            if (button.isDisabled()) return;
+            
+            boolean isDragging = button.getProperties().containsKey("isDragging") && 
+                                (Boolean) button.getProperties().get("isDragging");
+            
+            if (e.getEventType() == javafx.scene.input.MouseEvent.MOUSE_ENTERED && !isDragging) {
+                button.setScaleX(1.05);
+                button.setScaleY(1.05);
+                button.setEffect(new javafx.scene.effect.DropShadow(
+                    javafx.scene.effect.BlurType.GAUSSIAN,
+                    javafx.scene.paint.Color.rgb(0, 0, 0, 0.3),
+                    8, 0, 0, 3
+                ));
+            } else if (e.getEventType() == javafx.scene.input.MouseEvent.MOUSE_EXITED) {
+                button.setScaleX(1.0);
+                button.setScaleY(1.0);
+                button.setEffect(defaultEffect);
+            } else if (e.getEventType() == javafx.scene.input.MouseEvent.MOUSE_PRESSED && e.isPrimaryButtonDown()) {
+                button.setScaleX(0.98);
+                button.setScaleY(0.98);
+                button.setEffect(new javafx.scene.effect.DropShadow(
+                    javafx.scene.effect.BlurType.GAUSSIAN,
+                    javafx.scene.paint.Color.rgb(0, 0, 0, 0.1),
+                    2, 0, 0, 1
+                ));
+            } else if (e.getEventType() == javafx.scene.input.MouseEvent.MOUSE_RELEASED) {
+                // Check if mouse is still over button
+                if (button.contains(button.screenToLocal(e.getScreenX(), e.getScreenY()))) {
+                    button.setScaleX(1.05);
+                    button.setScaleY(1.05);
+                    button.setEffect(new javafx.scene.effect.DropShadow(
+                        javafx.scene.effect.BlurType.GAUSSIAN,
+                        javafx.scene.paint.Color.rgb(0, 0, 0, 0.3),
+                        8, 0, 0, 3
+                    ));
+                } else {
+                    button.setScaleX(1.0);
+                    button.setScaleY(1.0);
+                    button.setEffect(defaultEffect);
+                }
+            }
+        });
+    }
+    
     public static void toggleSelectedClass(Button button, boolean selected) {
         if (selected) {
             if (!button.getStyleClass().contains(SELECTED_CLASS)) {
