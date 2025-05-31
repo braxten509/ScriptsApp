@@ -28,6 +28,8 @@ public class ChatScriptsPanel {
     private final TextArea textArea;
     private ButtonController buttonController;
     private ScriptButton selectedButton;
+    private String originalContent; // Track original content for change detection
+    private boolean contentChanged; // Flag to track if content has been modified
     
     public ChatScriptsPanel() {
         root = new BorderPane();
@@ -49,6 +51,13 @@ public class ChatScriptsPanel {
         textArea = new TextArea();
         textArea.setPromptText("Enter your script content here...");
         SimpleStyler.setTextAreaHeight(textArea);
+        
+        // Add text change listener to track modifications
+        textArea.textProperty().addListener((observable, oldValue, newValue) -> {
+            if (selectedButton != null && originalContent != null) {
+                contentChanged = !originalContent.equals(newValue);
+            }
+        });
         
         // Create controls
         Button addButton = new Button("Add Script");
@@ -107,9 +116,14 @@ public class ChatScriptsPanel {
             
             // Only clear selection if we didn't click on a script button or text area
             if (!isButton && !isTextArea) {
-                clearButtonSelection();
-                selectedButton = null;
-                textArea.clear();
+                // Check if we need to save changes before clearing
+                if (checkAndPromptSaveChanges()) {
+                    clearButtonSelection();
+                    selectedButton = null;
+                    textArea.clear();
+                    originalContent = null;
+                    contentChanged = false;
+                }
             }
         });
     }
@@ -265,6 +279,11 @@ public class ChatScriptsPanel {
         
         // Button click action
         button.setOnAction(e -> {
+            // Check if we need to save changes before switching
+            if (!checkAndPromptSaveChanges()) {
+                return; // User cancelled or there was an error
+            }
+            
             selectedButton = scriptButton;
             
             // Process variables in the script content
@@ -280,6 +299,9 @@ public class ChatScriptsPanel {
             }
             
             textArea.setText(processedContent);
+            // Store original content for change detection
+            this.originalContent = scriptButton.getContent();
+            this.contentChanged = false;
             
             // Copy to clipboard
             ClipboardContent content = new ClipboardContent();
@@ -563,6 +585,9 @@ public class ChatScriptsPanel {
     private void setupButtonContextMenu(Button button, ScriptButton scriptButton, Tab tab) {
         ContextMenu contextMenu = new ContextMenu();
         
+        MenuItem updateItem = new MenuItem("Update");
+        updateItem.setOnAction(e -> updateButtonContent(scriptButton));
+        
         MenuItem renameItem = new MenuItem("Rename");
         renameItem.setOnAction(e -> showRenameButtonDialog(scriptButton, button));
         
@@ -575,7 +600,7 @@ public class ChatScriptsPanel {
         MenuItem deleteItem = new MenuItem("Delete");
         deleteItem.setOnAction(e -> deleteButton(tab, scriptButton, button));
         
-        contextMenu.getItems().addAll(renameItem, changeColorItem, duplicateItem, deleteItem);
+        contextMenu.getItems().addAll(updateItem, new SeparatorMenuItem(), renameItem, changeColorItem, duplicateItem, deleteItem);
         button.setContextMenu(contextMenu);
     }
     
@@ -1059,5 +1084,73 @@ public class ChatScriptsPanel {
             e.printStackTrace();
         }
         return false;
+    }
+    
+    /**
+     * Updates the button content with current text area content after confirmation.
+     * @param scriptButton the button to update
+     */
+    private void updateButtonContent(ScriptButton scriptButton) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Update Button Content");
+        alert.setHeaderText("Update \"" + scriptButton.getName() + "\" with current text?");
+        alert.setContentText("This will replace the button's content with the text currently in the text area.");
+        
+        Optional<ButtonType> result = alert.showAndWait();
+        if (result.isPresent() && result.get() == ButtonType.OK) {
+            scriptButton.setContent(textArea.getText());
+            buttonController.saveState();
+            
+            // Update tracking variables if this is the currently selected button
+            if (selectedButton == scriptButton) {
+                originalContent = textArea.getText();
+                contentChanged = false;
+            }
+            
+            showAlert("Success", "Button content updated successfully.");
+        }
+    }
+    
+    /**
+     * Checks if content has been changed and prompts user to save if needed.
+     * @return true if it's safe to proceed (no changes or user saved/discarded), false if user cancelled
+     */
+    private boolean checkAndPromptSaveChanges() {
+        if (selectedButton != null && contentChanged && originalContent != null) {
+            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+            alert.setTitle("Save Changes");
+            alert.setHeaderText("Save changes to \"" + selectedButton.getName() + "\"?");
+            alert.setContentText("You have unsaved changes. Do you want to save them?");
+            
+            ButtonType saveButton = new ButtonType("Save", ButtonBar.ButtonData.YES);
+            ButtonType discardButton = new ButtonType("Discard", ButtonBar.ButtonData.NO);
+            ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+            
+            alert.getButtonTypes().setAll(saveButton, discardButton, cancelButton);
+            
+            Optional<ButtonType> result = alert.showAndWait();
+            
+            if (result.isPresent()) {
+                if (result.get() == saveButton) {
+                    // Save the changes
+                    selectedButton.setContent(textArea.getText());
+                    buttonController.saveState();
+                    originalContent = textArea.getText();
+                    contentChanged = false;
+                    return true;
+                } else if (result.get() == discardButton) {
+                    // Discard changes
+                    contentChanged = false;
+                    return true;
+                } else {
+                    // Cancel - don't proceed
+                    return false;
+                }
+            } else {
+                // Dialog was closed without selection - treat as cancel
+                return false;
+            }
+        }
+        return true; // No changes to save
     }
 }
