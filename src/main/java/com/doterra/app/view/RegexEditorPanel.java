@@ -13,6 +13,7 @@ import javafx.scene.control.TableCell;
 import javafx.util.Callback;
 import javafx.geometry.Pos;
 import com.doterra.app.model.RegexTemplate;
+import com.doterra.app.util.DialogUtil;
 import java.io.*;
 import javafx.util.StringConverter;
 import javafx.scene.control.SpinnerValueFactory;
@@ -210,6 +211,9 @@ public class RegexEditorPanel extends BorderPane {
         TextInputDialog dialog = new TextInputDialog();
         dialog.setTitle("Save Template");
         dialog.setHeaderText("Enter template name:");
+        
+        // Configure dialog to be independent and always on top
+        DialogUtil.configureDialog(dialog);
         dialog.showAndWait().ifPresent(name -> {
             if (!name.trim().isEmpty()) {
                 RegexTemplate newTemplate = new RegexTemplate(name);
@@ -235,6 +239,9 @@ public class RegexEditorPanel extends BorderPane {
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
         confirm.setTitle("Delete Template");
         confirm.setHeaderText("Delete template '" + currentTemplate.getName() + "'?");
+        
+        // Configure dialog to be independent and always on top
+        DialogUtil.configureDialog(confirm);
         confirm.showAndWait().ifPresent(response -> {
             if (response == ButtonType.OK) {
                 templates.remove(currentTemplate);
@@ -488,6 +495,9 @@ public class RegexEditorPanel extends BorderPane {
         dialog.setTitle("Template Syntax Help");
         dialog.setHeaderText("Regex Editor Template Commands");
         
+        // Configure dialog to be independent and always on top
+        DialogUtil.configureDialog(dialog);
+        
         TableView<HelpEntry> helpTable = new TableView<>();
         helpTable.setPrefSize(600, 400);
         
@@ -539,6 +549,9 @@ public class RegexEditorPanel extends BorderPane {
         TextInputDialog dialog = new TextInputDialog();
         dialog.setTitle("Add Pattern");
         dialog.setHeaderText("Enter pattern name:");
+        
+        // Configure dialog to be independent and always on top
+        DialogUtil.configureDialog(dialog);
         dialog.showAndWait().ifPresent(name -> {
             if (!name.trim().isEmpty()) {
                 patterns.add(new PatternEntry(name, ".*"));
@@ -704,12 +717,18 @@ public class RegexEditorPanel extends BorderPane {
         Alert alert = new Alert(Alert.AlertType.ERROR);
         alert.setTitle("Error");
         alert.setContentText(message);
+        
+        // Configure dialog to be independent and always on top
+        DialogUtil.configureDialog(alert);
         alert.showAndWait();
     }
     
     private void showInfo(String message) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Information");
+        
+        // Configure dialog to be independent and always on top
+        DialogUtil.configureDialog(alert);
         alert.setHeaderText(null);
         alert.setContentText(message);
         alert.showAndWait();

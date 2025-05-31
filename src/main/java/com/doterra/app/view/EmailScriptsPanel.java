@@ -9,6 +9,7 @@ import com.doterra.app.util.ComplexStyler;
 import com.doterra.app.util.HoverManager;
 import com.doterra.app.util.VariableReplacer;
 import com.doterra.app.util.HtmlEditor;
+import com.doterra.app.util.DialogUtil;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -645,6 +646,9 @@ public class EmailScriptsPanel {
         dialog.setContentText("Button name:");
         dialog.initStyle(StageStyle.UTILITY);
         
+        // Configure dialog to be independent and always on top
+        DialogUtil.configureDialog(dialog);
+        
         Optional<String> result = dialog.showAndWait();
         result.ifPresent(name -> {
             if (!name.trim().isEmpty()) {
@@ -665,6 +669,9 @@ public class EmailScriptsPanel {
         dialog.setHeaderText("Create a new tab");
         dialog.setContentText("Tab name:");
         
+        // Configure dialog to be independent and always on top
+        DialogUtil.configureDialog(dialog);
+        
         Optional<String> result = dialog.showAndWait();
         result.ifPresent(name -> {
             String trimmedName = name.trim();
@@ -675,6 +682,9 @@ public class EmailScriptsPanel {
                     alert.setTitle("Duplicate Tab Name");
                     alert.setHeaderText("Tab name already exists");
                     alert.setContentText("A tab with the name '" + trimmedName + "' already exists. Please choose a different name.");
+                    
+                    // Configure dialog to be independent and always on top
+                    DialogUtil.configureDialog(alert);
                     alert.showAndWait();
                     
                     // Recursively show the dialog again
@@ -709,6 +719,9 @@ public class EmailScriptsPanel {
         dialog.setHeaderText("Rename email script button");
         dialog.setContentText("Button name:");
         
+        // Configure dialog to be independent and always on top
+        DialogUtil.configureDialog(dialog);
+        
         Optional<String> result = dialog.showAndWait();
         result.ifPresent(name -> {
             if (!name.trim().isEmpty()) {
@@ -724,6 +737,9 @@ public class EmailScriptsPanel {
         Dialog<Color> dialog = new Dialog<>();
         dialog.setTitle("Change Button Color");
         dialog.setHeaderText("Choose a color for the button");
+        
+        // Configure dialog to be independent and always on top
+        DialogUtil.configureDialog(dialog);
         
         ButtonType okButtonType = new ButtonType("OK", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(okButtonType, ButtonType.CANCEL);
@@ -759,6 +775,9 @@ public class EmailScriptsPanel {
         alert.setHeaderText("Delete email script button");
         alert.setContentText("Are you sure you want to delete '" + scriptButton.getName() + "'?");
         
+        // Configure dialog to be independent and always on top
+        DialogUtil.configureDialog(alert);
+        
         Optional<ButtonType> result = alert.showAndWait();
         if (result.isPresent() && result.get() == ButtonType.OK) {
             buttonController.removeButtonFromTab(tab.getId(), scriptButton.getId());
@@ -785,6 +804,9 @@ public class EmailScriptsPanel {
         dialog.setHeaderText("Rename tab");
         dialog.setContentText("Tab name:");
         
+        // Configure dialog to be independent and always on top
+        DialogUtil.configureDialog(dialog);
+        
         Optional<String> result = dialog.showAndWait();
         result.ifPresent(name -> {
             String trimmedName = name.trim();
@@ -796,6 +818,9 @@ public class EmailScriptsPanel {
                     alert.setTitle("Duplicate Tab Name");
                     alert.setHeaderText("Tab name already exists");
                     alert.setContentText("A tab with the name '" + trimmedName + "' already exists. Please choose a different name.");
+                    
+                    // Configure dialog to be independent and always on top
+                    DialogUtil.configureDialog(alert);
                     alert.showAndWait();
                     
                     // Recursively show the dialog again
@@ -820,6 +845,9 @@ public class EmailScriptsPanel {
         alert.setTitle("Delete Tab");
         alert.setHeaderText("Delete tab");
         alert.setContentText("Are you sure you want to delete '" + tab.getText() + "'?");
+        
+        // Configure dialog to be independent and always on top
+        DialogUtil.configureDialog(alert);
         
         Optional<ButtonType> result = alert.showAndWait();
         if (result.isPresent() && result.get() == ButtonType.OK) {
@@ -893,6 +921,9 @@ public class EmailScriptsPanel {
         alert.setTitle(title);
         alert.setHeaderText(null);
         alert.setContentText(message);
+        
+        // Configure dialog to be independent and always on top
+        DialogUtil.configureDialog(alert);
         alert.showAndWait();
     }
     
@@ -1103,6 +1134,9 @@ public class EmailScriptsPanel {
         alert.setHeaderText("Update \"" + scriptButton.getName() + "\" with current HTML?");
         alert.setContentText("This will replace the button's content with the HTML currently in the editor.");
         
+        // Configure dialog to be independent and always on top
+        DialogUtil.configureDialog(alert);
+        
         Optional<ButtonType> result = alert.showAndWait();
         if (result.isPresent() && result.get() == ButtonType.OK) {
             scriptButton.setContent(htmlEditor.getHtmlText());
@@ -1137,6 +1171,9 @@ public class EmailScriptsPanel {
             alert.setTitle("Save Changes");
             alert.setHeaderText("Save changes to \"" + selectedButton.getName() + "\"?");
             alert.setContentText("You have unsaved changes. Do you want to save them?");
+            
+            // Configure dialog to be independent and always on top
+            DialogUtil.configureDialog(alert);
             
             ButtonType saveButton = new ButtonType("Save", ButtonBar.ButtonData.YES);
             ButtonType discardButton = new ButtonType("Discard", ButtonBar.ButtonData.NO);

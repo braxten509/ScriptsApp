@@ -110,6 +110,9 @@ public class VariableReplacer {
         dialog.setHeaderText("Enter values for variables:");
         dialog.initStyle(StageStyle.UTILITY);
         
+        // Configure dialog to be independent and always on top
+        DialogUtil.configureDialog(dialog);
+        
         // Set the button types
         ButtonType okButtonType = new ButtonType("OK", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(okButtonType, ButtonType.CANCEL);
@@ -175,6 +178,20 @@ public class VariableReplacer {
     }
     
     /**
+     * Strips HTML tags from content to get plain text.
+     * 
+     * @param content The content that may contain HTML tags
+     * @return Plain text without HTML tags
+     */
+    private static String stripHtmlTags(String content) {
+        if (content == null) {
+            return null;
+        }
+        // Remove HTML tags while preserving the text content
+        return content.replaceAll("<[^>]*>", "").trim();
+    }
+    
+    /**
      * Creates a formatted TextFlow showing context around a variable with proper styling.
      * Shows a few words before and after the variable, with the variable name bolded.
      * 
@@ -193,8 +210,11 @@ public class VariableReplacer {
             return textFlow;
         }
         
+        // Strip HTML tags to show plain text in the dialog
+        String plainContent = stripHtmlTags(content);
+        
         // Handle escaped parentheses temporarily
-        String tempContent = content.replace("\\(", "ESCAPED_OPEN_PAREN").replace("\\)", "ESCAPED_CLOSE_PAREN");
+        String tempContent = plainContent.replace("\\(", "ESCAPED_OPEN_PAREN").replace("\\)", "ESCAPED_CLOSE_PAREN");
         
         // Find the variable pattern in the content
         String variablePattern = "\\(" + Pattern.quote(variableName) + "\\)";

@@ -116,6 +116,9 @@ public class HtmlEditor extends HTMLEditor {
         urlDialog.setHeaderText("Enter the URL for the link");
         urlDialog.setContentText("URL:");
         
+        // Configure dialog to be independent and always on top
+        DialogUtil.configureDialog(urlDialog);
+        
         Optional<String> result = urlDialog.showAndWait();
         result.ifPresent(url -> {
             if (!url.trim().isEmpty()) {
@@ -125,6 +128,9 @@ public class HtmlEditor extends HTMLEditor {
                     textDialog.setTitle("Insert Link");
                     textDialog.setHeaderText("Enter the text for the link");
                     textDialog.setContentText("Link text:");
+                    
+                    // Configure dialog to be independent and always on top
+                    DialogUtil.configureDialog(textDialog);
                     
                     Optional<String> textResult = textDialog.showAndWait();
                     textResult.ifPresent(linkText -> {
