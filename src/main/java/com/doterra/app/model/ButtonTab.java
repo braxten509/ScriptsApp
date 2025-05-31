@@ -44,10 +44,16 @@ public class ButtonTab implements Serializable {
     }
     
     public boolean removeButton(String buttonId) {
+        if (buttonId == null) {
+            return false;
+        }
         return buttons.removeIf(button -> button.getId().equals(buttonId));
     }
     
     public ScriptButton getButton(String buttonId) {
+        if (buttonId == null) {
+            return null;
+        }
         for (ScriptButton button : buttons) {
             if (button.getId().equals(buttonId)) {
                 return button;

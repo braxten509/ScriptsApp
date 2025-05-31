@@ -39,7 +39,7 @@ public class DragDropTest extends ApplicationTest {
         stage.show();
         
         // Get button controller through reflection or by adding a getter
-        buttonController = new ButtonController();
+        buttonController = new ButtonController(false);
     }
     
     @Test

@@ -122,7 +122,7 @@ class ScriptButtonTest extends TestConfiguration {
         // Then
         assertEquals("", button.getName());
         assertEquals("", button.getContent());
-        assertEquals("", button.getColor());
+        assertEquals(Color.BLACK, button.getColor());
         
         // When
         button.setName("");

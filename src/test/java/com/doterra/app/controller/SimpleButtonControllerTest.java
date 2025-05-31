@@ -17,14 +17,14 @@ class SimpleButtonControllerTest {
     
     @BeforeEach
     void setUp() {
-        controller = new ButtonController();
+        controller = new ButtonController(false);
     }
     
     @Test
     @DisplayName("Constructor should create controller with empty tabs")
     void testConstructor() {
         // Given/When
-        ButtonController newController = new ButtonController();
+        ButtonController newController = new ButtonController(false);
         
         // Then
         assertTrue(newController.getAllTabs().isEmpty());

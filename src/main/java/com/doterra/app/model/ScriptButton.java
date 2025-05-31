@@ -16,7 +16,7 @@ public class ScriptButton implements Serializable {
     private String content;
     private transient Color color;
     
-    // Serializable color components
+    // Serializable color components for persistence
     private double red;
     private double green;
     private double blue;
@@ -70,6 +70,11 @@ public class ScriptButton implements Serializable {
             this.green = color.getGreen();
             this.blue = color.getBlue();
             this.opacity = color.getOpacity();
+        } else {
+            this.red = -1;
+            this.green = -1;
+            this.blue = -1;
+            this.opacity = -1;
         }
     }
     

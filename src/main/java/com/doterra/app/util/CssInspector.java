@@ -84,17 +84,7 @@ public class CssInspector {
             Label label = new Label(info);
             label.setFont(Font.font("Monospace", FontWeight.BOLD, 12));
             label.setTextFill(Color.BLACK);
-            label.setPadding(new Insets(4, 8, 4, 8));
-            
-            // Add a semi-transparent white background for readability
-            label.setBackground(new Background(new BackgroundFill(
-                Color.rgb(255, 255, 255, 0.85), 
-                new CornerRadii(4), 
-                Insets.EMPTY
-            )));
-            
-            // Add a subtle border
-            label.setStyle("-fx-border-color: rgba(0,0,0,0.2); -fx-border-width: 1px; -fx-border-radius: 4px;");
+            SimpleStyler.styleInspectorLabel(label);
             label.setMouseTransparent(true);
             
             currentPopup = new Popup();

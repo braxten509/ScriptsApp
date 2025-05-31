@@ -2,6 +2,8 @@ package com.doterra.app.view;
 
 import com.doterra.app.controller.NavigationController;
 import com.doterra.app.util.CssInspector;
+import com.doterra.app.util.SimpleStyler;
+import com.doterra.app.util.ComplexStyler;
 import javafx.geometry.Insets;
 import javafx.scene.control.Label;
 import javafx.scene.layout.BorderPane;
@@ -46,13 +48,13 @@ public class MainView {
     private VBox createSidebar() {
         VBox sidebar = new VBox(10);
         sidebar.setPadding(new Insets(15));
-        sidebar.setStyle("-fx-background-color: #3a3a3a;");
+        SimpleStyler.styleSidebar(sidebar);
         sidebar.setPrefWidth(200);
         sidebar.setAlignment(Pos.TOP_CENTER);
         
         // App title/logo
         Label titleLabel = new Label("doTERRA App");
-        titleLabel.setStyle("-fx-text-fill: white; -fx-font-size: 18px; -fx-font-weight: bold;");
+        SimpleStyler.styleTitleLabel(titleLabel);
         titleLabel.setPadding(new Insets(0, 0, 20, 0));
         
         // Navigation buttons
@@ -77,13 +79,10 @@ public class MainView {
         Button button = new Button(text);
         button.setMaxWidth(Double.MAX_VALUE);
         button.setPrefHeight(40);
-        button.setStyle("-fx-background-color: #555555; -fx-text-fill: white; -fx-font-size: 14px;");
+        SimpleStyler.styleNavigationButton(button);
         
         // Add hover effect
-        button.setOnMouseEntered(e -> 
-            button.setStyle("-fx-background-color: #777777; -fx-text-fill: white; -fx-font-size: 14px;"));
-        button.setOnMouseExited(e -> 
-            button.setStyle("-fx-background-color: #555555; -fx-text-fill: white; -fx-font-size: 14px;"));
+        ComplexStyler.applyNavigationButtonHoverEffect(button);
             
         return button;
     }
@@ -96,13 +95,15 @@ public class MainView {
         // CSS Inspector toggle button
         ToggleButton cssInspectorBtn = new ToggleButton("CSS");
         cssInspectorBtn.setPrefSize(35, 35);
-        cssInspectorBtn.setStyle("-fx-background-color: #444444; -fx-text-fill: white; -fx-font-size: 10px;");
+        SimpleStyler.styleCssInspectorButton(cssInspectorBtn);
         cssInspectorBtn.setTooltip(new javafx.scene.control.Tooltip("Toggle CSS Inspector - Shows CSS classes on hover"));
         
         // Style for selected state
+        ComplexStyler.applyCssInspectorToggleEffect(cssInspectorBtn);
+        
+        // Handle CSS inspector enable/disable logic
         cssInspectorBtn.selectedProperty().addListener((obs, wasSelected, isSelected) -> {
             if (isSelected) {
-                cssInspectorBtn.setStyle("-fx-background-color: #2196F3; -fx-text-fill: white; -fx-font-size: 10px;");
                 // Enable CSS inspector when scene is available
                 if (root.getScene() != null) {
                     cssInspector.enable(root.getScene());
@@ -115,7 +116,6 @@ public class MainView {
                     });
                 }
             } else {
-                cssInspectorBtn.setStyle("-fx-background-color: #444444; -fx-text-fill: white; -fx-font-size: 10px;");
                 cssInspector.disable();
             }
         });

@@ -5,7 +5,7 @@ import com.doterra.app.model.ScriptButton;
 
 import java.io.*;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -15,8 +15,18 @@ public class ButtonController {
     private static final String SAVE_FILE = "doterra_buttons.dat";
     
     public ButtonController() {
-        tabs = new HashMap<>();
-        loadState();
+        this(true);
+    }
+    
+    /**
+     * Constructor for testing purposes
+     * @param loadState whether to load existing state from file
+     */
+    public ButtonController(boolean loadState) {
+        tabs = new LinkedHashMap<>(); // Use LinkedHashMap to preserve order
+        if (loadState) {
+            loadState();
+        }
     }
     
     public void addTab(ButtonTab tab) {
@@ -92,5 +102,43 @@ public class ButtonController {
         for (ButtonTab tab : newOrder) {
             tabs.put(tab.getId(), tab);
         }
+    }
+    
+    public Map<String, ButtonTab> getTabs() {
+        // Return tabs indexed by name for test compatibility
+        Map<String, ButtonTab> tabsByName = new LinkedHashMap<>();
+        for (ButtonTab tab : tabs.values()) {
+            tabsByName.put(tab.getName(), tab);
+        }
+        return tabsByName;
+    }
+    
+    public Map<String, ButtonTab> getTabsById() {
+        return new LinkedHashMap<>(tabs);
+    }
+    
+    /**
+     * Checks if a tab name already exists.
+     * 
+     * @param name the tab name to check
+     * @return true if the name is already used by another tab
+     */
+    public boolean isTabNameDuplicate(String name) {
+        return tabs.values().stream()
+                .anyMatch(tab -> tab.getName().equals(name));
+    }
+    
+    /**
+     * Checks if a tab name already exists, excluding a specific tab.
+     * This is useful for renaming operations where the current tab should be ignored.
+     * 
+     * @param name the tab name to check
+     * @param excludeTabId the tab ID to exclude from the check
+     * @return true if the name is already used by another tab (excluding the specified tab)
+     */
+    public boolean isTabNameDuplicate(String name, String excludeTabId) {
+        return tabs.values().stream()
+                .filter(tab -> !tab.getId().equals(excludeTabId))
+                .anyMatch(tab -> tab.getName().equals(name));
     }
 }

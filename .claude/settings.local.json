@@ -12,7 +12,10 @@
       "Bash(mvn clean:*)",
       "Bash(mvn:*)",
       "Bash(git add:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(rm:*)"
     ]
   },
   "enableAllProjectMcpServers": false

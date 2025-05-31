@@ -16,14 +16,14 @@ class ButtonControllerTest extends TestConfiguration {
     
     @BeforeEach
     void setUp() {
-        controller = new ButtonController();
+        controller = new ButtonController(false); // Don't load state for tests
     }
     
     @Test
     @DisplayName("Constructor should create controller with empty tabs")
     void testConstructor() {
         // Given/When
-        ButtonController newController = new ButtonController();
+        ButtonController newController = new ButtonController(false);
         
         // Then
         assertTrue(newController.getAllTabs().isEmpty());
@@ -258,5 +258,96 @@ class ButtonControllerTest extends TestConfiguration {
         // Verify we can retrieve specific buttons
         assertEquals(chatButton1, controller.getButton(tab1.getId(), chatButton1.getId()));
         assertEquals(emailButton1, controller.getButton(tab2.getId(), emailButton1.getId()));
+    }
+    
+    @Test
+    @DisplayName("isTabNameDuplicate should return false for empty controller")
+    void testIsTabNameDuplicateEmptyController() {
+        // When/Then
+        assertFalse(controller.isTabNameDuplicate("Any Name"));
+    }
+    
+    @Test
+    @DisplayName("isTabNameDuplicate should return false for unique name")
+    void testIsTabNameDuplicateUniqueName() {
+        // Given
+        ButtonTab tab = new ButtonTab("Existing Tab");
+        controller.addTab(tab);
+        
+        // When/Then
+        assertFalse(controller.isTabNameDuplicate("New Tab"));
+    }
+    
+    @Test
+    @DisplayName("isTabNameDuplicate should return true for duplicate name")
+    void testIsTabNameDuplicateDuplicateName() {
+        // Given
+        ButtonTab tab = new ButtonTab("Existing Tab");
+        controller.addTab(tab);
+        
+        // When/Then
+        assertTrue(controller.isTabNameDuplicate("Existing Tab"));
+    }
+    
+    @Test
+    @DisplayName("isTabNameDuplicate should be case sensitive")
+    void testIsTabNameDuplicateCaseSensitive() {
+        // Given
+        ButtonTab tab = new ButtonTab("Existing Tab");
+        controller.addTab(tab);
+        
+        // When/Then
+        assertFalse(controller.isTabNameDuplicate("existing tab"));
+        assertFalse(controller.isTabNameDuplicate("EXISTING TAB"));
+    }
+    
+    @Test
+    @DisplayName("isTabNameDuplicate with exclusion should exclude specified tab")
+    void testIsTabNameDuplicateWithExclusion() {
+        // Given
+        ButtonTab tab1 = new ButtonTab("Tab 1");
+        ButtonTab tab2 = new ButtonTab("Tab 2");
+        controller.addTab(tab1);
+        controller.addTab(tab2);
+        
+        // When/Then - Should not consider tab1 as duplicate when excluding it
+        assertFalse(controller.isTabNameDuplicate("Tab 1", tab1.getId()));
+        
+        // But should still detect duplicate from other tabs
+        assertTrue(controller.isTabNameDuplicate("Tab 2", tab1.getId()));
+    }
+    
+    @Test
+    @DisplayName("isTabNameDuplicate with exclusion should handle non-existing exclusion ID")
+    void testIsTabNameDuplicateWithNonExistingExclusion() {
+        // Given
+        ButtonTab tab = new ButtonTab("Existing Tab");
+        controller.addTab(tab);
+        
+        // When/Then
+        assertTrue(controller.isTabNameDuplicate("Existing Tab", "non-existing-id"));
+    }
+    
+    @Test
+    @DisplayName("isTabNameDuplicate should handle multiple tabs with same name check")
+    void testIsTabNameDuplicateMultipleTabs() {
+        // Given
+        ButtonTab tab1 = new ButtonTab("Chat Scripts");
+        ButtonTab tab2 = new ButtonTab("Email Scripts");
+        ButtonTab tab3 = new ButtonTab("Notes");
+        
+        controller.addTab(tab1);
+        controller.addTab(tab2);
+        controller.addTab(tab3);
+        
+        // When/Then
+        assertTrue(controller.isTabNameDuplicate("Chat Scripts"));
+        assertTrue(controller.isTabNameDuplicate("Email Scripts"));
+        assertTrue(controller.isTabNameDuplicate("Notes"));
+        assertFalse(controller.isTabNameDuplicate("New Tab"));
+        
+        // Test exclusion with multiple tabs
+        assertFalse(controller.isTabNameDuplicate("Chat Scripts", tab1.getId()));
+        assertTrue(controller.isTabNameDuplicate("Email Scripts", tab1.getId()));
     }
 }

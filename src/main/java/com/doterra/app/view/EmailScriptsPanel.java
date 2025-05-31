@@ -4,6 +4,8 @@ import com.doterra.app.controller.ButtonController;
 import com.doterra.app.model.ButtonTab;
 import com.doterra.app.model.ScriptButton;
 import com.doterra.app.util.ColorUtil;
+import com.doterra.app.util.SimpleStyler;
+import com.doterra.app.util.ComplexStyler;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -28,7 +30,7 @@ public class EmailScriptsPanel {
     
     public EmailScriptsPanel() {
         root = new BorderPane();
-        root.setPadding(new Insets(10));
+        SimpleStyler.applyDefaultLayout(root);
         
         buttonController = new ButtonController();
         
@@ -44,7 +46,7 @@ public class EmailScriptsPanel {
         
         // Create HTML editor for rich text editing
         htmlEditor = new HTMLEditor();
-        htmlEditor.setPrefHeight(200);
+        SimpleStyler.setHtmlEditorHeight(htmlEditor);
         htmlEditor.getStyleClass().add("html-editor");
         
         // Create controls
@@ -65,6 +67,28 @@ public class EmailScriptsPanel {
         
         // Keyboard shortcuts
         setupKeyboardShortcuts();
+        
+        // Click handler to deselect buttons when clicking outside
+        root.addEventFilter(MouseEvent.MOUSE_CLICKED, e -> {
+            // Check if the target or any of its parents is a button
+            Node target = e.getPickResult().getIntersectedNode();
+            boolean isButton = false;
+            
+            while (target != null) {
+                if (target instanceof Button && target.getStyleClass().contains("script-button")) {
+                    isButton = true;
+                    break;
+                }
+                target = target.getParent();
+            }
+            
+            // Only clear selection if we didn't click on a script button
+            if (!isButton) {
+                clearButtonSelection();
+                selectedButton = null;
+                htmlEditor.setHtmlText("");
+            }
+        });
     }
     
     private void setupTabsFromController() {
@@ -93,7 +117,7 @@ public class EmailScriptsPanel {
         // Add direct click handler for testing
         Button addTabButton = new Button("+");
         addTabButton.setOnAction(e -> showAddTabDialog());
-        addTabButton.setStyle("-fx-background-color: transparent; -fx-border-color: transparent;");
+        SimpleStyler.styleAddTabButton(addTabButton);
         addTab.setGraphic(addTabButton);
         
         tabPane.getTabs().add(addTab);
@@ -110,24 +134,10 @@ public class EmailScriptsPanel {
         
         // Create 6x6 button grid
         GridPane buttonGrid = new GridPane();
-        buttonGrid.setPadding(new Insets(10));
-        buttonGrid.setHgap(5);
-        buttonGrid.setVgap(5);
+        SimpleStyler.applyDefaultLayout(buttonGrid);
         
         // Configure grid columns and rows for 6x6 with responsive sizing
-        for (int i = 0; i < 6; i++) {
-            ColumnConstraints col = new ColumnConstraints();
-            col.setPercentWidth(100.0 / 6); // Each column takes 1/6 of the width
-            col.setHgrow(Priority.ALWAYS);
-            col.setFillWidth(true);
-            buttonGrid.getColumnConstraints().add(col);
-            
-            RowConstraints row = new RowConstraints();
-            row.setPercentHeight(100.0 / 6); // Each row takes 1/6 of the height
-            row.setVgrow(Priority.ALWAYS);
-            row.setFillHeight(true);
-            buttonGrid.getRowConstraints().add(row);
-        }
+        ComplexStyler.applyResponsiveGridLayout(buttonGrid, 6, 6);
         
         ScrollPane scrollPane = new ScrollPane(buttonGrid);
         scrollPane.setFitToWidth(true);
@@ -200,16 +210,13 @@ public class EmailScriptsPanel {
     
     private Button createButtonUI(ScriptButton scriptButton) {
         Button button = new Button(scriptButton.getName());
-        button.getStyleClass().add("script-button");
-        button.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE); // Allow button to grow
+        ComplexStyler.applyScriptButtonClass(button);
+        SimpleStyler.makeButtonFillSpace(button);
         button.setWrapText(true);
         button.setUserData(scriptButton); // Store script button reference for drag-and-drop
         
         // Set button color
-        if (scriptButton.getColor() != null) {
-            String colorStyle = ColorUtil.colorToHex(scriptButton.getColor());
-            button.setStyle("-fx-base: " + colorStyle + ";");
-        }
+        ComplexStyler.applyButtonColor(button, scriptButton);
         
         // Button click action
         button.setOnAction(e -> {
@@ -223,8 +230,9 @@ public class EmailScriptsPanel {
             
             // Visual feedback for selection
             clearButtonSelection();
-            button.getStyleClass().add("selected");
+            ComplexStyler.toggleSelectedClass(button, true);
         });
+        
         
         return button;
     }
@@ -242,20 +250,41 @@ public class EmailScriptsPanel {
                 dragboard.setDragView(snapshot, e.getX(), e.getY());
                 
                 // Add visual feedback
-                button.setOpacity(0.5);
+                ComplexStyler.applyDragStartVisuals(button);
                 e.consume();
             }
         });
         
         button.setOnDragDone(e -> {
-            button.setOpacity(1.0);
+            ComplexStyler.applyDragEndVisuals(button);
+            
+            // Force JavaFX to re-evaluate hover states by simulating mouse movement
+            javafx.application.Platform.runLater(() -> {
+                // Get the scene and current mouse position
+                if (button.getScene() != null) {
+                    double mouseX = e.getScreenX();
+                    double mouseY = e.getScreenY();
+                    
+                    // Convert screen coordinates to scene coordinates
+                    javafx.geometry.Point2D sceneCoords = button.getScene().getRoot().screenToLocal(mouseX, mouseY);
+                    
+                    // Fire a mouse moved event on the scene to trigger hover detection
+                    MouseEvent moveEvent = new MouseEvent(MouseEvent.MOUSE_MOVED,
+                        sceneCoords.getX(), sceneCoords.getY(), mouseX, mouseY,
+                        MouseButton.NONE, 0, false, false, false, false,
+                        false, false, false, false, false, false, null);
+                    
+                    button.getScene().getRoot().fireEvent(moveEvent);
+                }
+            });
+            
             e.consume();
         });
         
         button.setOnDragOver(e -> {
             if (e.getGestureSource() != button && e.getDragboard().hasString()) {
                 e.acceptTransferModes(TransferMode.MOVE);
-                button.getStyleClass().add("drag-target");
+                ComplexStyler.addDragTargetVisual(button);
             }
             e.consume();
         });
@@ -270,7 +299,7 @@ public class EmailScriptsPanel {
         });
         
         button.setOnDragExited(e -> {
-            button.getStyleClass().remove("drag-target");
+            ComplexStyler.removeDragTargetVisual(button);
             e.consume();
         });
         
@@ -304,7 +333,7 @@ public class EmailScriptsPanel {
                 }
             }
             
-            button.getStyleClass().remove("drag-target");
+            ComplexStyler.removeDragTargetVisual(button);
             e.setDropCompleted(success);
             e.consume();
         });
@@ -566,8 +595,8 @@ public class EmailScriptsPanel {
         Optional<Color> result = dialog.showAndWait();
         result.ifPresent(color -> {
             scriptButton.setColor(color);
-            String colorStyle = ColorUtil.colorToHex(color);
-            button.setStyle("-fx-base: " + colorStyle + ";");
+            scriptButton.setColor(color);
+            ComplexStyler.applyButtonColor(button, scriptButton);
             buttonController.saveState();
         });
     }
@@ -707,7 +736,7 @@ public class EmailScriptsPanel {
                     GridPane buttonGrid = (GridPane) scrollPane.getContent();
                     buttonGrid.getChildren().forEach(node -> {
                         if (node instanceof Button) {
-                            node.getStyleClass().remove("selected");
+                            ComplexStyler.toggleSelectedClass((Button) node, false);
                         }
                     });
                 }
