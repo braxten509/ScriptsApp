@@ -10,7 +10,16 @@ This guide will help you create a Windows executable (.exe) file for the doTERRA
 
 2. **The JAR file** must be built (already done: `target/doTERRAApp20-2.0.0.jar`)
 
-## Method 1: Automated Script (Recommended)
+## Method 1: Simple Launcher (Easiest)
+
+Just double-click `doTERRA-App.bat` to run the application!
+
+This batch file will:
+- Check for Java installation
+- Launch the application from the JAR file
+- Work from any location
+
+## Method 2: Automated Script (Create Portable .exe)
 
 1. Open Command Prompt as Administrator
 2. Navigate to this project directory
@@ -18,18 +27,23 @@ This guide will help you create a Windows executable (.exe) file for the doTERRA
    ```cmd
    create-exe.bat
    ```
+4. Choose option **2** for "Create portable app image"
 
 This will create:
-- An installer: `exe-output/doTERRA-App-2.0.0.exe`
-- Start Menu shortcuts
-- Desktop shortcut (optional during install)
+- A portable application in `exe-output/doTERRA-App/`
+- An executable at `exe-output/doTERRA-App/doTERRA-App.exe`
+- No installation needed - just run the .exe!
 
-## Method 2: Manual jpackage Command
+## Method 3: Manual jpackage Command
 
-Open Command Prompt in this directory and run:
-
+For a portable app (no installer):
 ```cmd
-jpackage --input target --name "doTERRA-App" --main-jar doTERRAApp20-2.0.0.jar --main-class com.doterra.app.DoTerraApp --type exe --dest exe-output --app-version 2.0.0 --description "doTERRA Scripts Application" --vendor "doTERRA Scripts" --win-console --win-dir-chooser --win-menu --win-shortcut
+jpackage --input target --name "doTERRA-App" --main-jar doTERRAApp20-2.0.0.jar --main-class com.doterra.app.DoTerraApp --type app-image --dest exe-output --app-version 2.0.0
+```
+
+For an MSI installer (requires WiX Toolset):
+```cmd
+jpackage --input target --name "doTERRA-App" --main-jar doTERRAApp20-2.0.0.jar --main-class com.doterra.app.DoTerraApp --type msi --dest exe-output --app-version 2.0.0 --win-dir-chooser --win-menu --win-shortcut
 ```
 
 ## Method 3: Alternative Tools
