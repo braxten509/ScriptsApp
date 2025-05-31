@@ -10,6 +10,7 @@ A JavaFX desktop application for managing doTERRA scripts for chat and email com
 - **Dual-panel system**: Chat Scripts (plain text) and Email Scripts (rich HTML)
 - **Hierarchical organization**: Tabs contain buttons, buttons store scripts
 - **Drag-and-drop interface**: Reorder buttons within/between tabs, reorder tabs
+- **Variable templates**: Use (variable) syntax for dynamic content replacement
 - **Customization**: Button colors, tab names, script content
 - **Persistence**: Automatic state saving to `doterra_buttons.dat`
 - **Context menus**: Right-click management for buttons and tabs
@@ -93,6 +94,34 @@ mvn test -Dmaven.surefire.debug
 - **UI Tests**: TestFX-based integration tests for user interactions
 - **Drag-Drop Tests**: Specialized tests for reordering functionality
 - **Headless Mode**: Tests run without display using glass robot and software rendering
+
+## Variable Templates
+
+The application supports dynamic variable replacement in script content using a simple syntax:
+
+### Syntax
+- **Variables**: Use `(variable_name)` to define variables that will prompt for user input
+- **Escaped Parentheses**: Use `\(text)` to include literal parentheses that won't be treated as variables
+
+### Examples
+```
+Hello (customer_name), your order (order_number) is ready for pickup!
+```
+When clicked, this will show a single dialog with input fields for:
+- customer_name
+- order_number
+
+```
+Use \(parentheses) for formatting but (real_variable) for replacement.
+```
+This will show a dialog with one input field for "real_variable" and leave the escaped parentheses as literal text.
+
+### Implementation
+- Variables are processed when buttons are clicked
+- All variables are presented in a single dialog with labeled input fields
+- User can cancel variable input to abort the operation
+- Both chat scripts (plain text) and email scripts (HTML) support variables
+- Variable replacement happens before content is copied to clipboard
 
 ## Key Development Notes
 

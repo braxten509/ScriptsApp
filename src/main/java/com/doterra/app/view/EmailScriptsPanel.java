@@ -7,6 +7,7 @@ import com.doterra.app.util.ColorUtil;
 import com.doterra.app.util.SimpleStyler;
 import com.doterra.app.util.ComplexStyler;
 import com.doterra.app.util.HoverManager;
+import com.doterra.app.util.VariableReplacer;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -267,13 +268,26 @@ public class EmailScriptsPanel {
         // Button click action
         button.setOnAction(e -> {
             selectedButton = scriptButton;
-            htmlEditor.setHtmlText(scriptButton.getContent());
+            
+            // Process variables in the script content
+            String originalContent = scriptButton.getContent();
+            String processedContent = originalContent;
+            
+            if (VariableReplacer.hasVariables(originalContent)) {
+                processedContent = VariableReplacer.replaceVariables(originalContent, scriptButton.getName());
+                if (processedContent == null) {
+                    // User cancelled variable input, don't proceed
+                    return;
+                }
+            }
+            
+            htmlEditor.setHtmlText(processedContent);
             
             // Copy to clipboard as HTML for email clients
             ClipboardContent content = new ClipboardContent();
-            content.putHtml(scriptButton.getContent());
+            content.putHtml(processedContent);
             // Also provide plain text version for compatibility
-            content.putString(scriptButton.getContent().replaceAll("<[^>]*>", ""));
+            content.putString(processedContent.replaceAll("<[^>]*>", ""));
             Clipboard.getSystemClipboard().setContent(content);
             
             // Visual feedback for selection

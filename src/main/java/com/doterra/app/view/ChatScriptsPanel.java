@@ -7,6 +7,7 @@ import com.doterra.app.util.ColorUtil;
 import com.doterra.app.util.SimpleStyler;
 import com.doterra.app.util.ComplexStyler;
 import com.doterra.app.util.HoverManager;
+import com.doterra.app.util.VariableReplacer;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -265,11 +266,24 @@ public class ChatScriptsPanel {
         // Button click action
         button.setOnAction(e -> {
             selectedButton = scriptButton;
-            textArea.setText(scriptButton.getContent());
+            
+            // Process variables in the script content
+            String originalContent = scriptButton.getContent();
+            String processedContent = originalContent;
+            
+            if (VariableReplacer.hasVariables(originalContent)) {
+                processedContent = VariableReplacer.replaceVariables(originalContent, scriptButton.getName());
+                if (processedContent == null) {
+                    // User cancelled variable input, don't proceed
+                    return;
+                }
+            }
+            
+            textArea.setText(processedContent);
             
             // Copy to clipboard
             ClipboardContent content = new ClipboardContent();
-            content.putString(scriptButton.getContent());
+            content.putString(processedContent);
             Clipboard.getSystemClipboard().setContent(content);
             
             // Visual feedback for selection
