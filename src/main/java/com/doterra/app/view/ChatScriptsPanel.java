@@ -868,10 +868,7 @@ public class ChatScriptsPanel {
                         e.consume();
                         break;
                     case S:
-                        if (selectedButton != null) {
-                            selectedButton.setContent(textArea.getText());
-                            buttonController.saveState();
-                        }
+                        handleSaveShortcut();
                         e.consume();
                         break;
                 }
@@ -927,6 +924,58 @@ public class ChatScriptsPanel {
         // Configure dialog to be independent and always on top
         DialogUtil.configureDialog(alert);
         alert.showAndWait();
+    }
+    
+    /**
+     * Handles Ctrl+S shortcut - saves current button or prompts to create new one.
+     */
+    private void handleSaveShortcut() {
+        if (selectedButton != null) {
+            // Save current button content
+            selectedButton.setContent(textArea.getText());
+            buttonController.saveState();
+            
+            // Update tracking variables 
+            originalContent = textArea.getText();
+            contentChanged = false;
+            
+            showAlert("Saved", "Button '" + selectedButton.getName() + "' has been saved.");
+        } else {
+            // No button selected, prompt to create new one
+            String currentText = textArea.getText().trim();
+            if (!currentText.isEmpty()) {
+                // Ask user for button name
+                TextInputDialog dialog = new TextInputDialog();
+                dialog.setTitle("Save as New Button");
+                dialog.setHeaderText("Create a new button with the current text");
+                dialog.setContentText("Button name:");
+                
+                // Configure dialog to be independent and always on top
+                DialogUtil.configureDialog(dialog);
+                
+                Optional<String> result = dialog.showAndWait();
+                result.ifPresent(name -> {
+                    if (!name.trim().isEmpty()) {
+                        Tab selectedTab = tabPane.getSelectionModel().getSelectedItem();
+                        if (selectedTab != null && !"addTab".equals(selectedTab.getId())) {
+                            ScriptButton newButton = new ScriptButton(name.trim(), currentText, Color.GRAY);
+                            buttonController.addButtonToTab(selectedTab.getId(), newButton);
+                            addButtonToTab(selectedTab, newButton);
+                            buttonController.saveState();
+                            
+                            // Select the new button
+                            selectedButton = newButton;
+                            originalContent = currentText;
+                            contentChanged = false;
+                            
+                            showAlert("Created", "New button '" + name.trim() + "' has been created and saved.");
+                        }
+                    }
+                });
+            } else {
+                showAlert("No Content", "Enter some text before using Ctrl+S to save.");
+            }
+        }
     }
     
     private void removeButtonFromTabUI(String tabId, String buttonId) {

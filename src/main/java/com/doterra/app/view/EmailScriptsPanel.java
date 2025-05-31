@@ -866,10 +866,7 @@ public class EmailScriptsPanel {
                         e.consume();
                         break;
                     case S:
-                        if (selectedButton != null) {
-                            selectedButton.setContent(htmlEditor.getHtmlText());
-                            buttonController.saveState();
-                        }
+                        handleSaveShortcut();
                         e.consume();
                         break;
                 }
@@ -925,6 +922,58 @@ public class EmailScriptsPanel {
         // Configure dialog to be independent and always on top
         DialogUtil.configureDialog(alert);
         alert.showAndWait();
+    }
+    
+    /**
+     * Handles Ctrl+S shortcut - saves current button or prompts to create new one.
+     */
+    private void handleSaveShortcut() {
+        if (selectedButton != null) {
+            // Save current button content
+            selectedButton.setContent(htmlEditor.getHtmlText());
+            buttonController.saveState();
+            
+            // Update tracking variables if this is the currently selected button
+            originalContent = htmlEditor.getHtmlText();
+            contentChanged = false;
+            
+            showAlert("Saved", "Button '" + selectedButton.getName() + "' has been saved.");
+        } else {
+            // No button selected, prompt to create new one
+            String currentHtml = htmlEditor.getHtmlText().trim();
+            if (!currentHtml.isEmpty() && !currentHtml.equals("<html dir=\"ltr\"><head></head><body contenteditable=\"true\"></body></html>")) {
+                // Ask user for button name
+                TextInputDialog dialog = new TextInputDialog();
+                dialog.setTitle("Save as New Button");
+                dialog.setHeaderText("Create a new email script button with the current HTML");
+                dialog.setContentText("Button name:");
+                
+                // Configure dialog to be independent and always on top
+                DialogUtil.configureDialog(dialog);
+                
+                Optional<String> result = dialog.showAndWait();
+                result.ifPresent(name -> {
+                    if (!name.trim().isEmpty()) {
+                        Tab selectedTab = tabPane.getSelectionModel().getSelectedItem();
+                        if (selectedTab != null && !"addTab".equals(selectedTab.getId())) {
+                            ScriptButton newButton = new ScriptButton(name.trim(), currentHtml, Color.GRAY);
+                            buttonController.addButtonToTab(selectedTab.getId(), newButton);
+                            addButtonToTab(selectedTab, newButton);
+                            buttonController.saveState();
+                            
+                            // Select the new button
+                            selectedButton = newButton;
+                            originalContent = currentHtml;
+                            contentChanged = false;
+                            
+                            showAlert("Created", "New email script button '" + name.trim() + "' has been created and saved.");
+                        }
+                    }
+                });
+            } else {
+                showAlert("No Content", "Enter some content in the HTML editor before using Ctrl+S to save.");
+            }
+        }
     }
     
     // Public methods for testing and external access

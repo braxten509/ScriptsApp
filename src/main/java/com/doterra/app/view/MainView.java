@@ -30,6 +30,7 @@ public class MainView {
     private final RegexEditorPanel regexEditorPanel;
     private final CalculatorPanel calculatorPanel;
     private final TodoPanel todoPanel;
+    private final StickyNotePanel stickyNotePanel;
     
     public MainView() {
         root = new BorderPane();
@@ -43,13 +44,14 @@ public class MainView {
         regexEditorPanel = new RegexEditorPanel();
         calculatorPanel = new CalculatorPanel();
         todoPanel = new TodoPanel();
+        stickyNotePanel = new StickyNotePanel();
         
         // Now create sidebar after panels are initialized
         sidebar = createSidebar();
         root.setLeft(sidebar);
         
         // Set up navigation controller
-        navigationController = new NavigationController(root, chatScriptsPanel, emailScriptsPanel, regexEditorPanel, calculatorPanel, todoPanel);
+        navigationController = new NavigationController(root, chatScriptsPanel, emailScriptsPanel, regexEditorPanel, calculatorPanel, todoPanel, stickyNotePanel);
         
         // Set the initial panel (Chat Scripts)
         navigationController.showPanel("chat");
@@ -84,6 +86,9 @@ public class MainView {
         Button todoBtn = (Button) todoBtnContainer.getChildren().get(0);
         todoBtn.setOnAction(e -> navigationController.showPanel("todo"));
         
+        Button stickyNoteBtn = createNavButton("Sticky Notes");
+        stickyNoteBtn.setOnAction(e -> navigationController.showPanel("stickynote"));
+        
         // Add spacer to push content to top
         VBox spacer = new VBox();
         VBox.setVgrow(spacer, Priority.ALWAYS);
@@ -91,7 +96,7 @@ public class MainView {
         // Create feature panel at bottom
         HBox featurePanel = createFeaturePanel();
         
-        sidebar.getChildren().addAll(titleLabel, chatScriptsBtn, emailScriptsBtn, regexEditorBtn, calculatorBtn, todoBtnContainer, spacer, featurePanel);
+        sidebar.getChildren().addAll(titleLabel, chatScriptsBtn, emailScriptsBtn, regexEditorBtn, calculatorBtn, todoBtnContainer, stickyNoteBtn, spacer, featurePanel);
         return sidebar;
     }
     
@@ -204,5 +209,18 @@ public class MainView {
     
     public TodoPanel getTodoPanel() {
         return todoPanel;
+    }
+    
+    public StickyNotePanel getStickyNotePanel() {
+        return stickyNotePanel;
+    }
+    
+    /**
+     * Cleanup method to be called when the application is closing.
+     */
+    public void cleanup() {
+        if (stickyNotePanel != null) {
+            stickyNotePanel.cleanup();
+        }
     }
 }

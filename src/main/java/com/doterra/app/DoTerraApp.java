@@ -30,6 +30,11 @@ public class DoTerraApp extends Application {
         primaryStage.setMinWidth(800);
         primaryStage.setMinHeight(600);
         
+        // Set up cleanup when application closes
+        primaryStage.setOnCloseRequest(e -> {
+            mainView.cleanup();
+        });
+        
         // Set up taskbar badge based on ready todo count
         setupTaskbarBadge(primaryStage, mainView);
         
