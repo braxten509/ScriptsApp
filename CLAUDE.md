@@ -116,10 +116,22 @@ Use \(parentheses) for formatting but (real_variable) for replacement.
 ```
 This will show a dialog with one input field for "real_variable" and leave the escaped parentheses as literal text.
 
+### Template Editing Workflow
+```
+Dear (customer_name), your (product) order will be shipped to (address).
+```
+If you fill in only "customer_name" = "John" and leave the others empty:
+```
+Dear John, your (product) order will be shipped to (address).
+```
+This makes it easy to partially fill templates and see remaining variables that need attention.
+
 ### Implementation
 - Variables are processed when buttons are clicked
 - All variables are presented in a single dialog with labeled input fields
 - User can cancel variable input to abort the operation
+- **Empty Values**: Variables left empty retain their literal text (e.g., `(name)` stays as `(name)`)
+- This allows template editing by leaving variables unfilled to see their placeholders
 - Both chat scripts (plain text) and email scripts (HTML) support variables
 - Variable replacement happens before content is copied to clipboard
 

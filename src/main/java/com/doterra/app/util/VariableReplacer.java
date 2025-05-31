@@ -44,6 +44,7 @@ public class VariableReplacer {
     /**
      * Replaces all variables in the content with user-provided values.
      * Shows input dialogs for each variable found.
+     * Variables with empty or no values are left as literal text (variable name).
      * 
      * @param content The original content with variables
      * @param scriptName The name of the script (for dialog titles)
@@ -76,11 +77,13 @@ public class VariableReplacer {
         // Replace all variables with their values
         for (String variable : variables) {
             String replacement = variableValues.get(variable);
-            if (replacement != null) {
-                // Replace the first occurrence of this variable
+            if (replacement != null && !replacement.trim().isEmpty()) {
+                // Replace the first occurrence of this variable with the provided value
                 result = result.replaceFirst("(?<!\\\\)\\(" + Pattern.quote(variable) + "\\)", 
                                           Matcher.quoteReplacement(replacement));
             }
+            // If replacement is null or empty, keep the literal variable text (variable)
+            // This allows users to see and edit templates by leaving variables unfilled
         }
         
         // Restore escaped parentheses

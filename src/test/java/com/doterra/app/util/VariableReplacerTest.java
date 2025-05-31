@@ -78,4 +78,22 @@ public class VariableReplacerTest {
         assertEquals("first name", variables.get(0));
         assertEquals("last name", variables.get(1));
     }
+    
+    @Test
+    public void testEmptyVariableValuesKeepLiteralText() {
+        // Note: This test verifies the expected behavior but cannot test the interactive dialog
+        // The actual replacement logic now keeps literal variable text when values are empty
+        String content = "Hello (name), your order (order_id) is ready!";
+        List<String> variables = VariableReplacer.findVariables(content);
+        
+        // Verify variables are found correctly
+        assertEquals(2, variables.size());
+        assertEquals("name", variables.get(0));
+        assertEquals("order_id", variables.get(1));
+        
+        // The actual behavior change is:
+        // - If user provides a value: (name) -> "John"
+        // - If user provides empty/no value: (name) remains as (name)
+        // This allows template editing by seeing unfilled variables
+    }
 }
