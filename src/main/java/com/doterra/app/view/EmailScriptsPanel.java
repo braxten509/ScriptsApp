@@ -33,7 +33,7 @@ public class EmailScriptsPanel {
         root = new BorderPane();
         SimpleStyler.applyDefaultLayout(root);
         
-        buttonController = new ButtonController();
+        buttonController = new ButtonController("doterra_email_buttons.dat");
         
         // Create tab pane for button categories
         tabPane = new TabPane();
@@ -93,9 +93,21 @@ public class EmailScriptsPanel {
     }
     
     private void setupTabsFromController() {
+        // Clear ALL tabs (including the + tab)
         tabPane.getTabs().clear();
         
+        // Get unique tabs from controller
+        java.util.Map<String, ButtonTab> uniqueTabs = new java.util.LinkedHashMap<>();
+        
         for (ButtonTab buttonTab : buttonController.getAllTabs()) {
+            // Use tab name as key to ensure uniqueness
+            if (!uniqueTabs.containsKey(buttonTab.getName())) {
+                uniqueTabs.put(buttonTab.getName(), buttonTab);
+            }
+        }
+        
+        // Add unique tabs to UI
+        for (ButtonTab buttonTab : uniqueTabs.values()) {
             addTabToUI(buttonTab);
         }
         
@@ -130,7 +142,14 @@ public class EmailScriptsPanel {
     }
     
     private void addTabToUI(ButtonTab buttonTab) {
-        Tab tab = new Tab(buttonTab.getName());
+        // Check if a tab with this ID already exists in the TabPane
+        for (Tab existingTab : tabPane.getTabs()) {
+            if (buttonTab.getId().equals(existingTab.getId())) {
+                return; // Tab already exists, don't add duplicate
+            }
+        }
+        
+        Tab tab = new Tab(); // Don't set text here since we'll use a graphic label
         tab.setId(buttonTab.getId());
         
         // Create 6x6 button grid
@@ -157,7 +176,7 @@ public class EmailScriptsPanel {
         setupGridDragAndDrop(buttonGrid);
         
         // Add context menu to tab
-        setupTabContextMenu(tab);
+        setupTabContextMenu(tab, buttonTab);
         
         tabPane.getTabs().add(tab);
     }
@@ -246,7 +265,11 @@ public class EmailScriptsPanel {
             if (e.getButton() == MouseButton.PRIMARY) {
                 Dragboard dragboard = button.startDragAndDrop(TransferMode.MOVE);
                 ClipboardContent content = new ClipboardContent();
-                content.putString(scriptButton.getId());
+                
+                // Store both button ID and source tab ID for cross-tab moves
+                Tab currentTab = tabPane.getSelectionModel().getSelectedItem();
+                String dragData = scriptButton.getId() + ":" + currentTab.getId();
+                content.putString(dragData);
                 dragboard.setContent(content);
                 
                 // Create drag view
@@ -294,29 +317,53 @@ public class EmailScriptsPanel {
             Dragboard db = e.getDragboard();
             boolean success = false;
             if (db.hasString()) {
-                String draggedButtonId = db.getString();
+                String dragData = db.getString();
+                String[] parts = dragData.split(":");
+                String draggedButtonId = parts[0];
+                String sourceTabId = parts.length > 1 ? parts[1] : null;
+                
                 GridPane grid = (GridPane) button.getParent();
+                Tab currentTab = tabPane.getSelectionModel().getSelectedItem();
                 
-                // Find the dragged button
-                Button draggedButton = findButtonById(grid, draggedButtonId);
-                
-                if (draggedButton != null && draggedButton != button) {
-                    // Get target position (where we want to drop)
-                    int targetRow = GridPane.getRowIndex(button) != null ? GridPane.getRowIndex(button) : 0;
-                    int targetCol = GridPane.getColumnIndex(button) != null ? GridPane.getColumnIndex(button) : 0;
+                // Check if this is a cross-tab move
+                if (sourceTabId != null && !sourceTabId.equals(currentTab.getId()) && !"addTab".equals(currentTab.getId())) {
+                    // Cross-tab move
+                    ScriptButton draggedScriptButton = buttonController.getButton(sourceTabId, draggedButtonId);
+                    if (draggedScriptButton != null) {
+                        // Move button to new tab
+                        if (buttonController.moveButtonBetweenTabs(sourceTabId, currentTab.getId(), draggedButtonId)) {
+                            // Remove button from source tab UI
+                            removeButtonFromTabUI(sourceTabId, draggedButtonId);
+                            
+                            // Add button to current tab
+                            addButtonToTab(currentTab, draggedScriptButton);
+                            
+                            success = true;
+                            buttonController.saveState();
+                        }
+                    }
+                } else {
+                    // Same tab move - find the dragged button
+                    Button draggedButton = findButtonById(grid, draggedButtonId);
                     
-                    // Get source position (where the dragged button came from)
-                    int sourceRow = GridPane.getRowIndex(draggedButton) != null ? GridPane.getRowIndex(draggedButton) : 0;
-                    int sourceCol = GridPane.getColumnIndex(draggedButton) != null ? GridPane.getColumnIndex(draggedButton) : 0;
-                    
-                    // Swap the positions
-                    GridPane.setRowIndex(draggedButton, targetRow);
-                    GridPane.setColumnIndex(draggedButton, targetCol);
-                    GridPane.setRowIndex(button, sourceRow);
-                    GridPane.setColumnIndex(button, sourceCol);
-                    
-                    success = true;
-                    updateButtonOrder(grid);
+                    if (draggedButton != null && draggedButton != button) {
+                        // Get target position (where we want to drop)
+                        int targetRow = GridPane.getRowIndex(button) != null ? GridPane.getRowIndex(button) : 0;
+                        int targetCol = GridPane.getColumnIndex(button) != null ? GridPane.getColumnIndex(button) : 0;
+                        
+                        // Get source position (where the dragged button came from)
+                        int sourceRow = GridPane.getRowIndex(draggedButton) != null ? GridPane.getRowIndex(draggedButton) : 0;
+                        int sourceCol = GridPane.getColumnIndex(draggedButton) != null ? GridPane.getColumnIndex(draggedButton) : 0;
+                        
+                        // Swap the positions
+                        GridPane.setRowIndex(draggedButton, targetRow);
+                        GridPane.setColumnIndex(draggedButton, targetCol);
+                        GridPane.setRowIndex(button, sourceRow);
+                        GridPane.setColumnIndex(button, sourceCol);
+                        
+                        success = true;
+                        updateButtonOrder(grid);
+                    }
                 }
             }
             
@@ -327,12 +374,15 @@ public class EmailScriptsPanel {
     }
     
     private Button findButtonById(GridPane grid, String buttonId) {
+        // Handle both formats: "buttonId" and "buttonId:tabId"
+        String actualButtonId = buttonId.contains(":") ? buttonId.split(":")[0] : buttonId;
+        
         for (Node child : grid.getChildren()) {
             if (child instanceof Button) {
                 Button btn = (Button) child;
                 if (btn.getUserData() instanceof ScriptButton) {
                     ScriptButton script = (ScriptButton) btn.getUserData();
-                    if (script.getId().equals(buttonId)) {
+                    if (script.getId().equals(actualButtonId)) {
                         return btn;
                     }
                 }
@@ -367,26 +417,58 @@ public class EmailScriptsPanel {
             Dragboard db = e.getDragboard();
             boolean success = false;
             if (db.hasString()) {
-                String draggedButtonId = db.getString();
-                Button draggedButton = findButtonById(grid, draggedButtonId);
+                String dragData = db.getString();
+                String[] parts = dragData.split(":");
+                String draggedButtonId = parts[0];
+                String sourceTabId = parts.length > 1 ? parts[1] : null;
                 
-                if (draggedButton != null) {
-                    // Calculate target cell
-                    double cellWidth = (grid.getWidth() - grid.getPadding().getLeft() - grid.getPadding().getRight() - (5 * grid.getHgap())) / 6;
-                    double cellHeight = (grid.getHeight() - grid.getPadding().getTop() - grid.getPadding().getBottom() - (5 * grid.getVgap())) / 6;
-                    
-                    double adjustedX = e.getX() - grid.getPadding().getLeft();
-                    double adjustedY = e.getY() - grid.getPadding().getTop();
-                    
-                    int targetCol = Math.max(0, Math.min(5, (int) (adjustedX / (cellWidth + grid.getHgap()))));
-                    int targetRow = Math.max(0, Math.min(5, (int) (adjustedY / (cellHeight + grid.getVgap()))));
-                    
-                    // Only move if target cell is empty
-                    if (isGridCellEmpty(grid, targetCol, targetRow)) {
-                        GridPane.setRowIndex(draggedButton, targetRow);
-                        GridPane.setColumnIndex(draggedButton, targetCol);
-                        success = true;
-                        updateButtonOrder(grid);
+                Tab currentTab = tabPane.getSelectionModel().getSelectedItem();
+                
+                // Calculate target cell
+                double cellWidth = (grid.getWidth() - grid.getPadding().getLeft() - grid.getPadding().getRight() - (5 * grid.getHgap())) / 6;
+                double cellHeight = (grid.getHeight() - grid.getPadding().getTop() - grid.getPadding().getBottom() - (5 * grid.getVgap())) / 6;
+                
+                double adjustedX = e.getX() - grid.getPadding().getLeft();
+                double adjustedY = e.getY() - grid.getPadding().getTop();
+                
+                int targetCol = Math.max(0, Math.min(5, (int) (adjustedX / (cellWidth + grid.getHgap()))));
+                int targetRow = Math.max(0, Math.min(5, (int) (adjustedY / (cellHeight + grid.getVgap()))));
+                
+                // Check if target cell is empty
+                if (isGridCellEmpty(grid, targetCol, targetRow)) {
+                    // Check if this is a cross-tab move
+                    if (sourceTabId != null && !sourceTabId.equals(currentTab.getId()) && !"addTab".equals(currentTab.getId())) {
+                        // Cross-tab move
+                        ScriptButton draggedScriptButton = buttonController.getButton(sourceTabId, draggedButtonId);
+                        if (draggedScriptButton != null) {
+                            // Move button to new tab
+                            if (buttonController.moveButtonBetweenTabs(sourceTabId, currentTab.getId(), draggedButtonId)) {
+                                // Remove button from source tab UI
+                                removeButtonFromTabUI(sourceTabId, draggedButtonId);
+                                
+                                // Create new button and add at specific position
+                                Button newButton = createButtonUI(draggedScriptButton);
+                                setupButtonDragAndDrop(newButton, draggedScriptButton);
+                                setupButtonContextMenu(newButton, draggedScriptButton, currentTab);
+                                
+                                GridPane.setRowIndex(newButton, targetRow);
+                                GridPane.setColumnIndex(newButton, targetCol);
+                                grid.getChildren().add(newButton);
+                                
+                                success = true;
+                                updateButtonOrder(grid);
+                                buttonController.saveState();
+                            }
+                        }
+                    } else {
+                        // Same tab move
+                        Button draggedButton = findButtonById(grid, draggedButtonId);
+                        if (draggedButton != null) {
+                            GridPane.setRowIndex(draggedButton, targetRow);
+                            GridPane.setColumnIndex(draggedButton, targetCol);
+                            success = true;
+                            updateButtonOrder(grid);
+                        }
                     }
                 }
             }
@@ -462,7 +544,7 @@ public class EmailScriptsPanel {
         button.setContextMenu(contextMenu);
     }
     
-    private void setupTabContextMenu(Tab tab) {
+    private void setupTabContextMenu(Tab tab, ButtonTab buttonTab) {
         if ("addTab".equals(tab.getId())) return;
         
         ContextMenu contextMenu = new ContextMenu();
@@ -475,8 +557,16 @@ public class EmailScriptsPanel {
         
         contextMenu.getItems().addAll(renameItem, deleteItem);
         
-        Label tabLabel = new Label(tab.getText());
+        // Create a wider label that takes up more space in the tab header
+        Label tabLabel = new Label(buttonTab.getName()); // Use ButtonTab name, not tab text
         tabLabel.setContextMenu(contextMenu);
+        tabLabel.setMinWidth(80); // Ensure minimum width
+        tabLabel.setPrefWidth(120); // Preferred width
+        tabLabel.setMaxWidth(Double.MAX_VALUE); // Allow expansion
+        
+        // Add drag-and-drop support to the label (which will now be larger)
+        setupTabHeaderDragAndDrop(tabLabel, tab);
+        
         tab.setGraphic(tabLabel);
     }
     
@@ -619,7 +709,10 @@ public class EmailScriptsPanel {
     }
     
     private void showRenameTabDialog(Tab tab) {
-        TextInputDialog dialog = new TextInputDialog(tab.getText());
+        ButtonTab buttonTab = buttonController.getTab(tab.getId());
+        if (buttonTab == null) return;
+        
+        TextInputDialog dialog = new TextInputDialog(buttonTab.getName());
         dialog.setTitle("Rename Tab");
         dialog.setHeaderText("Rename tab");
         dialog.setContentText("Tab name:");
@@ -628,27 +721,23 @@ public class EmailScriptsPanel {
         result.ifPresent(name -> {
             String trimmedName = name.trim();
             if (!trimmedName.isEmpty()) {
-                ButtonTab buttonTab = buttonController.getTab(tab.getId());
-                if (buttonTab != null) {
-                    // Check for duplicate name, excluding the current tab
-                    if (buttonController.isTabNameDuplicate(trimmedName, buttonTab.getId())) {
-                        // Show error dialog for duplicate name
-                        Alert alert = new Alert(Alert.AlertType.ERROR);
-                        alert.setTitle("Duplicate Tab Name");
-                        alert.setHeaderText("Tab name already exists");
-                        alert.setContentText("A tab with the name '" + trimmedName + "' already exists. Please choose a different name.");
-                        alert.showAndWait();
-                        
-                        // Recursively show the dialog again
-                        showRenameTabDialog(tab);
-                        return;
-                    }
+                // Check for duplicate name, excluding the current tab
+                if (buttonController.isTabNameDuplicate(trimmedName, buttonTab.getId())) {
+                    // Show error dialog for duplicate name
+                    Alert alert = new Alert(Alert.AlertType.ERROR);
+                    alert.setTitle("Duplicate Tab Name");
+                    alert.setHeaderText("Tab name already exists");
+                    alert.setContentText("A tab with the name '" + trimmedName + "' already exists. Please choose a different name.");
+                    alert.showAndWait();
                     
-                    buttonTab.setName(trimmedName);
-                    tab.setText(trimmedName);
-                    ((Label) tab.getGraphic()).setText(trimmedName);
-                    buttonController.saveState();
+                    // Recursively show the dialog again
+                    showRenameTabDialog(tab);
+                    return;
                 }
+                
+                buttonTab.setName(trimmedName);
+                ((Label) tab.getGraphic()).setText(trimmedName);
+                buttonController.saveState();
             }
         });
     }
@@ -766,5 +855,81 @@ public class EmailScriptsPanel {
     
     public HTMLEditor getHtmlEditor() {
         return htmlEditor;
+    }
+    
+    private void removeButtonFromTabUI(String tabId, String buttonId) {
+        // Find the tab by ID
+        for (Tab tab : tabPane.getTabs()) {
+            if (tabId.equals(tab.getId()) && tab.getContent() instanceof ScrollPane) {
+                ScrollPane scrollPane = (ScrollPane) tab.getContent();
+                if (scrollPane.getContent() instanceof GridPane) {
+                    GridPane grid = (GridPane) scrollPane.getContent();
+                    // Remove the button with matching ID
+                    grid.getChildren().removeIf(node -> {
+                        if (node instanceof Button) {
+                            Button btn = (Button) node;
+                            if (btn.getUserData() instanceof ScriptButton) {
+                                ScriptButton scriptBtn = (ScriptButton) btn.getUserData();
+                                return scriptBtn.getId().equals(buttonId);
+                            }
+                        }
+                        return false;
+                    });
+                }
+            }
+        }
+    }
+    
+    private void setupTabHeaderDragAndDrop(Label tabLabel, Tab tab) {
+        // Add padding to make the label larger and more responsive to drops
+        tabLabel.setPadding(new Insets(8, 12, 8, 12));
+        
+        tabLabel.setOnDragOver(e -> {
+            if (e.getDragboard().hasString() && !"addTab".equals(tab.getId())) {
+                e.acceptTransferModes(TransferMode.MOVE);
+                tabLabel.setStyle("-fx-background-color: #e0e0e0; -fx-background-radius: 3px;");
+            }
+            e.consume();
+        });
+        
+        tabLabel.setOnDragExited(e -> {
+            tabLabel.setStyle("");
+            e.consume();
+        });
+        
+        tabLabel.setOnDragDropped(e -> {
+            Dragboard db = e.getDragboard();
+            boolean success = false;
+            if (db.hasString()) {
+                String dragData = db.getString();
+                String[] parts = dragData.split(":");
+                String draggedButtonId = parts[0];
+                String sourceTabId = parts.length > 1 ? parts[1] : null;
+                
+                // Only process if this is a different tab
+                if (sourceTabId != null && !sourceTabId.equals(tab.getId())) {
+                    ScriptButton draggedScriptButton = buttonController.getButton(sourceTabId, draggedButtonId);
+                    if (draggedScriptButton != null) {
+                        // Move button to new tab
+                        if (buttonController.moveButtonBetweenTabs(sourceTabId, tab.getId(), draggedButtonId)) {
+                            // Remove button from source tab UI
+                            removeButtonFromTabUI(sourceTabId, draggedButtonId);
+                            
+                            // Add button to target tab
+                            addButtonToTab(tab, draggedScriptButton);
+                            
+                            // Switch to the target tab
+                            tabPane.getSelectionModel().select(tab);
+                            
+                            success = true;
+                            buttonController.saveState();
+                        }
+                    }
+                }
+            }
+            tabLabel.setStyle("");
+            e.setDropCompleted(success);
+            e.consume();
+        });
     }
 }

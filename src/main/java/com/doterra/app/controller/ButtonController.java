@@ -12,10 +12,18 @@ import java.util.Map;
 public class ButtonController {
     
     private final Map<String, ButtonTab> tabs;
-    private static final String SAVE_FILE = "doterra_buttons.dat";
+    private final String saveFile;
     
     public ButtonController() {
-        this(true);
+        this(true, "doterra_buttons.dat");
+    }
+    
+    /**
+     * Constructor with custom save file
+     * @param saveFileName the name of the save file to use
+     */
+    public ButtonController(String saveFileName) {
+        this(true, saveFileName);
     }
     
     /**
@@ -23,13 +31,30 @@ public class ButtonController {
      * @param loadState whether to load existing state from file
      */
     public ButtonController(boolean loadState) {
+        this(loadState, "doterra_buttons.dat");
+    }
+    
+    /**
+     * Full constructor
+     * @param loadState whether to load existing state from file
+     * @param saveFileName the name of the save file to use
+     */
+    public ButtonController(boolean loadState, String saveFileName) {
         tabs = new LinkedHashMap<>(); // Use LinkedHashMap to preserve order
+        this.saveFile = saveFileName;
         if (loadState) {
             loadState();
         }
     }
     
     public void addTab(ButtonTab tab) {
+        // Check if a tab with the same name already exists
+        for (ButtonTab existingTab : tabs.values()) {
+            if (existingTab.getName().equals(tab.getName())) {
+                // Don't add duplicate tabs with the same name
+                return;
+            }
+        }
         tabs.put(tab.getId(), tab);
     }
     
@@ -69,7 +94,7 @@ public class ButtonController {
     }
     
     public void saveState() {
-        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(SAVE_FILE))) {
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(saveFile))) {
             // Convert to list for serialization
             List<ButtonTab> tabList = new ArrayList<>(tabs.values());
             oos.writeObject(tabList);
@@ -80,12 +105,12 @@ public class ButtonController {
     
     @SuppressWarnings("unchecked")
     public void loadState() {
-        File saveFile = new File(SAVE_FILE);
-        if (!saveFile.exists()) {
+        File file = new File(saveFile);
+        if (!file.exists()) {
             return; // No saved state to load
         }
         
-        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(SAVE_FILE))) {
+        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(saveFile))) {
             List<ButtonTab> tabList = (List<ButtonTab>) ois.readObject();
             tabs.clear();
             for (ButtonTab tab : tabList) {
@@ -140,5 +165,40 @@ public class ButtonController {
         return tabs.values().stream()
                 .filter(tab -> !tab.getId().equals(excludeTabId))
                 .anyMatch(tab -> tab.getName().equals(name));
+    }
+    
+    /**
+     * Moves a button from one tab to another.
+     * 
+     * @param sourceTabId the ID of the source tab
+     * @param targetTabId the ID of the target tab
+     * @param buttonId the ID of the button to move
+     * @return true if the move was successful, false otherwise
+     */
+    public boolean moveButtonBetweenTabs(String sourceTabId, String targetTabId, String buttonId) {
+        if (sourceTabId.equals(targetTabId)) {
+            return false; // Same tab, no move needed
+        }
+        
+        ButtonTab sourceTab = tabs.get(sourceTabId);
+        ButtonTab targetTab = tabs.get(targetTabId);
+        
+        if (sourceTab == null || targetTab == null) {
+            return false;
+        }
+        
+        ScriptButton button = sourceTab.getButton(buttonId);
+        if (button == null) {
+            return false;
+        }
+        
+        // Remove from source tab
+        if (sourceTab.removeButton(buttonId)) {
+            // Add to target tab
+            targetTab.addButton(button);
+            return true;
+        }
+        
+        return false;
     }
 }

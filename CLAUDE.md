@@ -4,15 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A JavaFX desktop application for managing doTERRA scripts for chat and email communications. The app features:
-- Sidebar navigation with Chat Scripts and Email Scripts panels
-- Chat Scripts: Plain text support for quick responses
-- Email Scripts: Rich text editor with HTML formatting
-- Customizable buttons to save and access scripts
-- Organizable tabs for categorizing buttons
-- Drag-and-drop reordering for tabs and buttons
-- Right-click context menus for button management
-- Visual feedback during drag operations
+A JavaFX desktop application for managing doTERRA scripts for chat and email communications. The app provides a professional interface for customer service representatives to quickly access and copy pre-written responses.
+
+### Core Features
+- **Dual-panel system**: Chat Scripts (plain text) and Email Scripts (rich HTML)
+- **Hierarchical organization**: Tabs contain buttons, buttons store scripts
+- **Drag-and-drop interface**: Reorder buttons within/between tabs, reorder tabs
+- **Customization**: Button colors, tab names, script content
+- **Persistence**: Automatic state saving to `doterra_buttons.dat`
+- **Context menus**: Right-click management for buttons and tabs
+- **Visual feedback**: Highlighted drop zones during drag operations
 
 ## Commands
 
@@ -38,6 +39,12 @@ mvn test -Dtest=ButtonControllerTest
 
 # Run tests with specific pattern
 mvn test -Dtest="*DragDrop*"
+
+# Skip tests during build
+mvn clean package -DskipTests
+
+# Run tests in debug mode (useful for troubleshooting)
+mvn test -Dmaven.surefire.debug
 ```
 
 ## Architecture
@@ -63,7 +70,7 @@ mvn test -Dtest="*DragDrop*"
 - **Button Reordering**: Buttons can be dragged within tabs and between tabs
 - **Tab Reordering**: Tab headers support drag-and-drop for reorganization
 - **Visual Feedback**: Drop zones highlighted during drag operations
-- **State Persistence**: Button and tab order automatically saved to `doterra_buttons.dat`
+- **State Persistence**: Chat scripts saved to `doterra_chat_buttons.dat`, Email scripts saved to `doterra_email_buttons.dat`
 
 ### UI Framework
 - **JavaFX 17.0.6** with additional libraries:
@@ -76,7 +83,7 @@ mvn test -Dtest="*DragDrop*"
 - **Responsive Layout**: BorderPane with resizable sidebar and content areas
 
 ### Data Models
-- Uses Serializable models for persistence in `doterra_buttons.dat`
+- Uses Serializable models for persistence (separate files for chat and email scripts)
 - UUID-based identification for tabs and buttons
 - LinkedHashMap preserves tab order, List maintains button order within tabs
 - State loading disabled in tests (see ButtonController constructor)
@@ -89,8 +96,22 @@ mvn test -Dtest="*DragDrop*"
 
 ## Key Development Notes
 
+### Configuration
 - Main class is defined in pom.xml as `com.doterra.app.DoTerraApp`
 - Minimum window size: 800x600, default: 1200x800
 - Java 17 target with Maven 3.6+ required
 - Maven Shade plugin creates executable JAR with dependencies
 - State persistence can be disabled for testing by commenting out `loadState()` calls
+
+### Development Tips
+- **Module System**: Project uses Java modules - see `module-info.java` for exports/requires
+- **TestFX Headless**: Tests run without display using system properties in pom.xml
+- **CSS Hot Reload**: Styles in `/styles/main.css` applied at runtime
+- **Serialization**: Models must maintain `serialVersionUID` for backward compatibility
+- **UUID Usage**: Tabs and buttons use UUIDs for unique identification
+
+### Common Troubleshooting
+- **Test Failures**: Ensure no save files exist in test directory
+- **UI Tests Hanging**: Check TestFX headless properties in pom.xml
+- **Build Issues**: Use `mvn clean` before building if encountering strange errors
+- **Runtime Errors**: Verify all JavaFX modules are included in module-info.java
