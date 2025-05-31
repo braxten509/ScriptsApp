@@ -27,7 +27,7 @@ public class SimpleStyler {
     public static final String CSS_INSPECTOR_ACTIVE_STYLE = "-fx-background-color: #2196F3; -fx-text-fill: white; -fx-font-size: 10px;";
     
     // Tab and Button Styles
-    public static final String ADD_TAB_BUTTON_STYLE = "-fx-background-color: transparent; -fx-border-color: transparent;";
+    public static final String ADD_TAB_BUTTON_STYLE = "-fx-background-color: transparent; -fx-border-color: transparent; -fx-text-fill: black;";
     
     // Inspector Label Styles
     public static final String INSPECTOR_LABEL_STYLE = "-fx-border-color: rgba(0,0,0,0.2); -fx-border-width: 1px; -fx-border-radius: 4px;";
