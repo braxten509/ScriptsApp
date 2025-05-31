@@ -8,6 +8,7 @@ import com.doterra.app.util.SimpleStyler;
 import com.doterra.app.util.ComplexStyler;
 import com.doterra.app.util.HoverManager;
 import com.doterra.app.util.VariableReplacer;
+import com.doterra.app.util.HtmlEditor;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -26,7 +27,7 @@ public class EmailScriptsPanel {
     
     private final BorderPane root;
     private final TabPane tabPane;
-    private final HTMLEditor htmlEditor;
+    private final HtmlEditor htmlEditor;
     private ButtonController buttonController;
     private ScriptButton selectedButton;
     private String originalContent; // Track original content for change detection
@@ -49,7 +50,7 @@ public class EmailScriptsPanel {
         }
         
         // Create HTML editor for rich text editing
-        htmlEditor = new HTMLEditor();
+        htmlEditor = new HtmlEditor();
         SimpleStyler.setHtmlEditorHeight(htmlEditor);
         htmlEditor.getStyleClass().add("html-editor");
         
@@ -914,7 +915,7 @@ public class EmailScriptsPanel {
         htmlEditor.setHtmlText(content);
     }
     
-    public HTMLEditor getHtmlEditor() {
+    public HtmlEditor getHtmlEditor() {
         return htmlEditor;
     }
     
