@@ -62,9 +62,21 @@ public class EmailScriptsPanel {
         setupTabsFromController();
         
         VBox centerSection = new VBox(5, controls, tabPane);
-        VBox.setVgrow(tabPane, Priority.ALWAYS); // Make tabPane expand to fill available space
-        root.setCenter(centerSection);
-        root.setBottom(htmlEditor);
+        VBox.setVgrow(tabPane, Priority.ALWAYS);
+        
+        // Create a SplitPane for resizable HTML editor
+        SplitPane splitPane = new SplitPane();
+        splitPane.setOrientation(javafx.geometry.Orientation.VERTICAL);
+        splitPane.getItems().addAll(centerSection, htmlEditor);
+        
+        // Set initial divider position (70% for buttons, 30% for HTML editor)
+        splitPane.setDividerPositions(0.7);
+        
+        // Set minimum sizes to keep buttons visible
+        centerSection.setMinHeight(300);
+        htmlEditor.setMinHeight(150);
+        
+        root.setCenter(splitPane);
         
         // Keyboard shortcuts
         setupKeyboardShortcuts();

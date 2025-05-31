@@ -36,8 +36,8 @@ public class SimpleStyler {
     public static final Insets DEFAULT_PADDING = new Insets(10);
     public static final Insets INSPECTOR_LABEL_PADDING = new Insets(4, 8, 4, 8);
     public static final double BUTTON_GRID_GAP = 5.0;
-    public static final double TEXT_AREA_HEIGHT = 150.0;
-    public static final double HTML_EDITOR_HEIGHT = 200.0;
+    public static final double TEXT_AREA_HEIGHT = 250.0;
+    public static final double HTML_EDITOR_HEIGHT = 300.0;
     
     // Background Definitions
     public static final Background INSPECTOR_LABEL_BACKGROUND = new Background(

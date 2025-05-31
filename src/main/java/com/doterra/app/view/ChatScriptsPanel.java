@@ -61,9 +61,21 @@ public class ChatScriptsPanel {
         setupTabsFromController();
         
         VBox centerSection = new VBox(5, controls, tabPane);
-        VBox.setVgrow(tabPane, Priority.ALWAYS); // Make tabPane expand to fill available space
-        root.setCenter(centerSection);
-        root.setBottom(textArea);
+        VBox.setVgrow(tabPane, Priority.ALWAYS);
+        
+        // Create a SplitPane for resizable text area
+        SplitPane splitPane = new SplitPane();
+        splitPane.setOrientation(javafx.geometry.Orientation.VERTICAL);
+        splitPane.getItems().addAll(centerSection, textArea);
+        
+        // Set initial divider position (70% for buttons, 30% for text area)
+        splitPane.setDividerPositions(0.7);
+        
+        // Set minimum sizes to keep buttons visible
+        centerSection.setMinHeight(300);
+        textArea.setMinHeight(100);
+        
+        root.setCenter(splitPane);
         
         // Keyboard shortcuts
         setupKeyboardShortcuts();
