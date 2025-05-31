@@ -13,7 +13,9 @@ import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.StackPane;
 import javafx.scene.Scene;
+import javafx.beans.property.IntegerProperty;
 
 public class MainView {
     
@@ -31,18 +33,20 @@ public class MainView {
     
     public MainView() {
         root = new BorderPane();
-        sidebar = createSidebar();
-        root.setLeft(sidebar);
         
         // Initialize CSS inspector
         cssInspector = new CssInspector();
         
-        // Initialize panels
+        // Initialize panels first
         chatScriptsPanel = new ChatScriptsPanel();
         emailScriptsPanel = new EmailScriptsPanel();
         regexEditorPanel = new RegexEditorPanel();
         calculatorPanel = new CalculatorPanel();
         todoPanel = new TodoPanel();
+        
+        // Now create sidebar after panels are initialized
+        sidebar = createSidebar();
+        root.setLeft(sidebar);
         
         // Set up navigation controller
         navigationController = new NavigationController(root, chatScriptsPanel, emailScriptsPanel, regexEditorPanel, calculatorPanel, todoPanel);
@@ -76,7 +80,8 @@ public class MainView {
         Button calculatorBtn = createNavButton("Calculator");
         calculatorBtn.setOnAction(e -> navigationController.showPanel("calculator"));
         
-        Button todoBtn = createNavButton("Todo");
+        StackPane todoBtnContainer = createNavButtonWithBadge("Todo", todoPanel.readyTodoCountProperty());
+        Button todoBtn = (Button) todoBtnContainer.getChildren().get(0);
         todoBtn.setOnAction(e -> navigationController.showPanel("todo"));
         
         // Add spacer to push content to top
@@ -86,7 +91,7 @@ public class MainView {
         // Create feature panel at bottom
         HBox featurePanel = createFeaturePanel();
         
-        sidebar.getChildren().addAll(titleLabel, chatScriptsBtn, emailScriptsBtn, regexEditorBtn, calculatorBtn, todoBtn, spacer, featurePanel);
+        sidebar.getChildren().addAll(titleLabel, chatScriptsBtn, emailScriptsBtn, regexEditorBtn, calculatorBtn, todoBtnContainer, spacer, featurePanel);
         return sidebar;
     }
     
@@ -100,6 +105,60 @@ public class MainView {
         ComplexStyler.applyNavigationButtonHoverEffect(button);
             
         return button;
+    }
+    
+    private StackPane createNavButtonWithBadge(String text, IntegerProperty badgeCountProperty) {
+        // Create a StackPane to hold both the button and badge
+        StackPane buttonContainer = new StackPane();
+        
+        Button button = new Button(text);
+        button.setMaxWidth(Double.MAX_VALUE);
+        button.setPrefHeight(40);
+        SimpleStyler.styleNavigationButton(button);
+        
+        // Add hover effect
+        ComplexStyler.applyNavigationButtonHoverEffect(button);
+        
+        // Create badge label
+        Label badge = new Label();
+        badge.setStyle(
+            "-fx-background-color: #f44336; " +
+            "-fx-text-fill: white; " +
+            "-fx-font-size: 10px; " +
+            "-fx-font-weight: bold; " +
+            "-fx-padding: 2 6 2 6; " +
+            "-fx-background-radius: 10; " +
+            "-fx-min-width: 18; " +
+            "-fx-min-height: 18; " +
+            "-fx-alignment: center;"
+        );
+        badge.setVisible(false);
+        
+        // Position badge in top-right corner
+        StackPane.setAlignment(badge, Pos.TOP_RIGHT);
+        badge.setTranslateX(-5);
+        badge.setTranslateY(5);
+        
+        // Bind badge text and visibility to the count property
+        badgeCountProperty.addListener((obs, oldCount, newCount) -> {
+            if (newCount.intValue() > 0) {
+                badge.setText(String.valueOf(newCount.intValue()));
+                badge.setVisible(true);
+            } else {
+                badge.setVisible(false);
+            }
+        });
+        
+        // Initial setup
+        if (badgeCountProperty.get() > 0) {
+            badge.setText(String.valueOf(badgeCountProperty.get()));
+            badge.setVisible(true);
+        }
+        
+        buttonContainer.getChildren().addAll(button, badge);
+        buttonContainer.setMaxWidth(Double.MAX_VALUE);
+        
+        return buttonContainer;
     }
     
     private HBox createFeaturePanel() {
@@ -141,5 +200,9 @@ public class MainView {
     
     public BorderPane getRoot() {
         return root;
+    }
+    
+    public TodoPanel getTodoPanel() {
+        return todoPanel;
     }
 }

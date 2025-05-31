@@ -3,6 +3,7 @@ package com.doterra.app.view;
 import javafx.beans.property.*;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.collections.ListChangeListener;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -19,6 +20,12 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.Arrays;
+import javafx.animation.Timeline;
+import javafx.animation.KeyFrame;
+import javafx.util.Duration;
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
 public class TodoPanel extends BorderPane {
     private TableView<TodoTask> activeTasksTable;
@@ -26,6 +33,63 @@ public class TodoPanel extends BorderPane {
     private ObservableList<TodoTask> activeTasks;
     private ObservableList<CompletedTask> completedTasks;
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd hh:mm a");
+    
+    // Property to track ready todo count for badge notifications
+    private final IntegerProperty readyTodoCount = new SimpleIntegerProperty(0);
+    
+    // Timer to check for wait until tasks that should become ready
+    private Timeline waitUntilChecker;
+    
+    // File path for saving todo data
+    private static final String TODO_DATA_FILE = "doterra_todos.dat";
+    
+    // Serializable data classes for persistence
+    private static class TodoData implements Serializable {
+        private static final long serialVersionUID = 1L;
+        public List<SerializableTodoTask> activeTasks;
+        public List<SerializableCompletedTask> completedTasks;
+        
+        public TodoData() {
+            activeTasks = new ArrayList<>();
+            completedTasks = new ArrayList<>();
+        }
+    }
+    
+    private static class SerializableTodoTask implements Serializable {
+        private static final long serialVersionUID = 1L;
+        public String name;
+        public String id;
+        public String description;
+        public TaskStatus status;
+        public LocalDateTime waitUntil;
+        
+        public SerializableTodoTask() {}
+        
+        public SerializableTodoTask(TodoTask task) {
+            this.name = task.getName();
+            this.id = task.getId();
+            this.description = task.getDescription();
+            this.status = task.getStatus();
+            this.waitUntil = task.getWaitUntil();
+        }
+    }
+    
+    private static class SerializableCompletedTask implements Serializable {
+        private static final long serialVersionUID = 1L;
+        public String name;
+        public String id;
+        public String description;
+        public LocalDateTime completedDate;
+        
+        public SerializableCompletedTask() {}
+        
+        public SerializableCompletedTask(CompletedTask task) {
+            this.name = task.getName();
+            this.id = task.getId();
+            this.description = task.getDescription();
+            this.completedDate = task.getCompletedDate();
+        }
+    }
     
     public static class TodoTask {
         private final BooleanProperty completed = new SimpleBooleanProperty(false);
@@ -84,6 +148,13 @@ public class TodoPanel extends BorderPane {
             this.completedDate = new SimpleObjectProperty<>(LocalDateTime.now());
         }
         
+        public CompletedTask(String name, String id, String description, LocalDateTime completedDate) {
+            this.name = new SimpleStringProperty(name);
+            this.id = new SimpleStringProperty(id);
+            this.description = new SimpleStringProperty(description);
+            this.completedDate = new SimpleObjectProperty<>(completedDate);
+        }
+        
         public StringProperty nameProperty() { return name; }
         public StringProperty idProperty() { return id; }
         public StringProperty descriptionProperty() { return description; }
@@ -121,6 +192,15 @@ public class TodoPanel extends BorderPane {
         activeTasks = FXCollections.observableArrayList();
         completedTasks = FXCollections.observableArrayList();
         
+        // Set up listeners to track ready todo count
+        setupReadyTodoTracking();
+        
+        // Set up timer to check wait until tasks
+        setupWaitUntilChecker();
+        
+        // Load saved todo data
+        loadTodoData();
+        
         setPadding(new Insets(20));
         setStyle("-fx-background-color: #f5f5f5;");
         
@@ -137,6 +217,154 @@ public class TodoPanel extends BorderPane {
         VBox.setVgrow(mainContent, Priority.ALWAYS);
         
         setCenter(mainContent);
+    }
+    
+    /**
+     * Get the property that tracks the number of ready todos for badge notifications
+     */
+    public IntegerProperty readyTodoCountProperty() {
+        return readyTodoCount;
+    }
+    
+    /**
+     * Get the current count of ready todos
+     */
+    public int getReadyTodoCount() {
+        return readyTodoCount.get();
+    }
+    
+    /**
+     * Set up listeners to automatically track ready todo count changes
+     */
+    private void setupReadyTodoTracking() {
+        // Listen for changes to the active tasks list
+        activeTasks.addListener((ListChangeListener<TodoTask>) change -> {
+            updateReadyTodoCount();
+            
+            // Also listen to status changes on each task
+            while (change.next()) {
+                if (change.wasAdded()) {
+                    for (TodoTask task : change.getAddedSubList()) {
+                        task.statusProperty().addListener((obs, oldStatus, newStatus) -> updateReadyTodoCount());
+                    }
+                }
+            }
+        });
+        
+        // Initial count
+        updateReadyTodoCount();
+    }
+    
+    /**
+     * Update the ready todo count by counting tasks with READY status
+     */
+    private void updateReadyTodoCount() {
+        long count = activeTasks.stream()
+            .filter(task -> task.getStatus() == TaskStatus.READY)
+            .count();
+        readyTodoCount.set((int) count);
+    }
+    
+    /**
+     * Save todo data to file
+     */
+    private void saveTodoData() {
+        try {
+            TodoData data = new TodoData();
+            
+            // Convert active tasks
+            for (TodoTask task : activeTasks) {
+                data.activeTasks.add(new SerializableTodoTask(task));
+            }
+            
+            // Convert completed tasks
+            for (CompletedTask task : completedTasks) {
+                data.completedTasks.add(new SerializableCompletedTask(task));
+            }
+            
+            // Save to file
+            try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(TODO_DATA_FILE))) {
+                oos.writeObject(data);
+            }
+        } catch (Exception e) {
+            System.err.println("Error saving todo data: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Load todo data from file
+     */
+    private void loadTodoData() {
+        try {
+            if (!Files.exists(Paths.get(TODO_DATA_FILE))) {
+                return; // No saved data yet
+            }
+            
+            TodoData data;
+            try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(TODO_DATA_FILE))) {
+                data = (TodoData) ois.readObject();
+            }
+            
+            // Clear existing data
+            activeTasks.clear();
+            completedTasks.clear();
+            
+            // Load active tasks
+            for (SerializableTodoTask serializable : data.activeTasks) {
+                TodoTask task = new TodoTask(serializable.name, serializable.id, serializable.description);
+                task.setStatus(serializable.status);
+                task.setWaitUntil(serializable.waitUntil);
+                activeTasks.add(task);
+                
+                // Add listener for status changes to trigger saves
+                task.statusProperty().addListener((obs, oldStatus, newStatus) -> saveTodoData());
+                task.nameProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
+                task.idProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
+                task.descriptionProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
+            }
+            
+            // Load completed tasks
+            for (SerializableCompletedTask serializable : data.completedTasks) {
+                CompletedTask task = new CompletedTask(serializable.name, serializable.id, serializable.description, serializable.completedDate);
+                completedTasks.add(task);
+            }
+            
+        } catch (Exception e) {
+            System.err.println("Error loading todo data: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Set up a timer to periodically check if any "Wait until" tasks should become "Ready"
+     */
+    private void setupWaitUntilChecker() {
+        waitUntilChecker = new Timeline(new KeyFrame(Duration.seconds(30), e -> checkWaitUntilTasks()));
+        waitUntilChecker.setCycleCount(Timeline.INDEFINITE);
+        waitUntilChecker.play();
+    }
+    
+    /**
+     * Check all tasks with WAIT_UNTIL status and change to READY if time has passed
+     */
+    private void checkWaitUntilTasks() {
+        LocalDateTime now = LocalDateTime.now();
+        boolean anyChanged = false;
+        
+        for (TodoTask task : activeTasks) {
+            if (task.getStatus() == TaskStatus.WAIT_UNTIL && task.getWaitUntil() != null) {
+                if (now.isAfter(task.getWaitUntil()) || now.equals(task.getWaitUntil())) {
+                    task.setStatus(TaskStatus.READY);
+                    task.setWaitUntil(null); // Clear the wait until time
+                    anyChanged = true;
+                }
+            }
+        }
+        
+        // Refresh the table and save data if any tasks changed
+        if (anyChanged) {
+            activeTasksTable.refresh();
+            saveTodoData();
+        }
     }
     
     private VBox createActiveTasksSection() {
@@ -185,16 +413,27 @@ public class TodoPanel extends BorderPane {
         TableColumn<TodoTask, Boolean> checkCol = new TableColumn<>("");
         checkCol.setPrefWidth(50);
         checkCol.setCellValueFactory(cellData -> cellData.getValue().completedProperty());
-        checkCol.setCellFactory(column -> new CheckBoxTableCell<TodoTask, Boolean>() {
-            @Override
-            public void updateItem(Boolean item, boolean empty) {
-                super.updateItem(item, empty);
-                if (!empty && item != null && item) {
-                    // Task completed - move to completed section
-                    TodoTask task = getTableView().getItems().get(getIndex());
-                    moveToCompleted(task);
+        checkCol.setCellFactory(column -> {
+            CheckBoxTableCell<TodoTask, Boolean> cell = new CheckBoxTableCell<TodoTask, Boolean>() {
+                @Override
+                public void updateItem(Boolean item, boolean empty) {
+                    super.updateItem(item, empty);
+                    if (!empty) {
+                        // Add listener to the checkbox directly
+                        CheckBox checkBox = (CheckBox) getGraphic();
+                        if (checkBox != null) {
+                            checkBox.setOnAction(e -> {
+                                if (checkBox.isSelected()) {
+                                    TodoTask task = getTableView().getItems().get(getIndex());
+                                    // Use Platform.runLater to avoid concurrent modification
+                                    javafx.application.Platform.runLater(() -> moveToCompleted(task));
+                                }
+                            });
+                        }
+                    }
                 }
-            }
+            };
+            return cell;
         });
         
         // Status column with custom cell factory
@@ -694,20 +933,30 @@ public class TodoPanel extends BorderPane {
     }
     
     private void addNewTask() {
-        TodoTask newTask = new TodoTask("New Task", "ID-" + (activeTasks.size() + 1), "Description");
+        TodoTask newTask = new TodoTask("", "", "");
+        
+        // Add listeners to save data when task is modified
+        newTask.statusProperty().addListener((obs, oldStatus, newStatus) -> saveTodoData());
+        newTask.nameProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
+        newTask.idProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
+        newTask.descriptionProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
+        
         activeTasks.add(newTask);
+        saveTodoData();
     }
     
     private void removeSelectedTask() {
         TodoTask selected = activeTasksTable.getSelectionModel().getSelectedItem();
         if (selected != null) {
             activeTasks.remove(selected);
+            saveTodoData();
         }
     }
     
     private void moveToCompleted(TodoTask task) {
         activeTasks.remove(task);
         completedTasks.add(new CompletedTask(task));
+        saveTodoData();
     }
     
     private void setupCompletedTasksContextMenu() {
@@ -753,9 +1002,16 @@ public class TodoPanel extends BorderPane {
             completedTask.getDescription()
         );
         
+        // Add listeners to save data when task is modified
+        restoredTask.statusProperty().addListener((obs, oldStatus, newStatus) -> saveTodoData());
+        restoredTask.nameProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
+        restoredTask.idProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
+        restoredTask.descriptionProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
+        
         // Remove from completed tasks and add to active tasks
         completedTasks.remove(completedTask);
         activeTasks.add(restoredTask);
+        saveTodoData();
     }
     
     private void permanentlyDeleteTask(CompletedTask completedTask) {
@@ -768,6 +1024,7 @@ public class TodoPanel extends BorderPane {
         confirmAlert.showAndWait().ifPresent(response -> {
             if (response == ButtonType.OK) {
                 completedTasks.remove(completedTask);
+                saveTodoData();
             }
         });
     }

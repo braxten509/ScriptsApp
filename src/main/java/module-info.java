@@ -2,6 +2,7 @@ module org.bchenay.doterraapp20 {
     requires javafx.controls;
     requires javafx.fxml;
     requires javafx.web;
+    requires javafx.swing;
 
     requires org.controlsfx.controls;
     requires com.dlsc.formsfx;
@@ -10,6 +11,7 @@ module org.bchenay.doterraapp20 {
     requires org.kordamp.bootstrapfx.core;
     requires com.almasb.fxgl.all;
     requires java.scripting;
+    requires java.desktop;
 
     opens org.bchenay.doterraapp20 to javafx.fxml;
     exports org.bchenay.doterraapp20;
