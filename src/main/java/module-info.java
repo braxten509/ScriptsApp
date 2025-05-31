@@ -9,6 +9,7 @@ module org.bchenay.doterraapp20 {
     requires org.kordamp.ikonli.javafx;
     requires org.kordamp.bootstrapfx.core;
     requires com.almasb.fxgl.all;
+    requires java.scripting;
 
     opens org.bchenay.doterraapp20 to javafx.fxml;
     exports org.bchenay.doterraapp20;

@@ -26,6 +26,7 @@ public class MainView {
     private final ChatScriptsPanel chatScriptsPanel;
     private final EmailScriptsPanel emailScriptsPanel;
     private final RegexEditorPanel regexEditorPanel;
+    private final CalculatorPanel calculatorPanel;
     
     public MainView() {
         root = new BorderPane();
@@ -39,9 +40,10 @@ public class MainView {
         chatScriptsPanel = new ChatScriptsPanel();
         emailScriptsPanel = new EmailScriptsPanel();
         regexEditorPanel = new RegexEditorPanel();
+        calculatorPanel = new CalculatorPanel();
         
         // Set up navigation controller
-        navigationController = new NavigationController(root, chatScriptsPanel, emailScriptsPanel, regexEditorPanel);
+        navigationController = new NavigationController(root, chatScriptsPanel, emailScriptsPanel, regexEditorPanel, calculatorPanel);
         
         // Set the initial panel (Chat Scripts)
         navigationController.showPanel("chat");
@@ -69,6 +71,9 @@ public class MainView {
         Button regexEditorBtn = createNavButton("Regex Editor");
         regexEditorBtn.setOnAction(e -> navigationController.showPanel("regex"));
         
+        Button calculatorBtn = createNavButton("Calculator");
+        calculatorBtn.setOnAction(e -> navigationController.showPanel("calculator"));
+        
         // Add spacer to push content to top
         VBox spacer = new VBox();
         VBox.setVgrow(spacer, Priority.ALWAYS);
@@ -76,7 +81,7 @@ public class MainView {
         // Create feature panel at bottom
         HBox featurePanel = createFeaturePanel();
         
-        sidebar.getChildren().addAll(titleLabel, chatScriptsBtn, emailScriptsBtn, regexEditorBtn, spacer, featurePanel);
+        sidebar.getChildren().addAll(titleLabel, chatScriptsBtn, emailScriptsBtn, regexEditorBtn, calculatorBtn, spacer, featurePanel);
         return sidebar;
     }
     
