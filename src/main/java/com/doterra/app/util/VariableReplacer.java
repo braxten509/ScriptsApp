@@ -6,6 +6,10 @@ import javafx.scene.layout.Priority;
 import javafx.stage.StageStyle;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
+import javafx.scene.text.Text;
+import javafx.scene.text.TextFlow;
+import javafx.scene.text.FontWeight;
+import javafx.scene.text.Font;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -66,7 +70,7 @@ public class VariableReplacer {
         }
         
         // Prompt user for all variables in a single dialog
-        Map<String, String> variableValues = promptForAllVariables(variables, scriptName);
+        Map<String, String> variableValues = promptForAllVariables(variables, scriptName, content);
         if (variableValues == null) {
             // User cancelled, return null to indicate cancellation
             return null;
@@ -97,9 +101,10 @@ public class VariableReplacer {
      * 
      * @param variables List of variable names
      * @param scriptName The name of the script
+     * @param content The original content to extract context from
      * @return Map of variable names to their values, or null if cancelled
      */
-    private static Map<String, String> promptForAllVariables(List<String> variables, String scriptName) {
+    private static Map<String, String> promptForAllVariables(List<String> variables, String scriptName, String content) {
         Dialog<Map<String, String>> dialog = new Dialog<>();
         dialog.setTitle("Script Variables - " + scriptName);
         dialog.setHeaderText("Enter values for variables:");
@@ -112,20 +117,31 @@ public class VariableReplacer {
         // Create the content
         GridPane grid = new GridPane();
         grid.setHgap(10);
-        grid.setVgap(10);
-        grid.setPadding(new Insets(20, 150, 10, 10));
+        grid.setVgap(15);
+        grid.setPadding(new Insets(20, 20, 10, 10));
         
         List<TextField> textFields = new ArrayList<>();
         
         for (int i = 0; i < variables.size(); i++) {
             String variable = variables.get(i);
-            Label label = new Label(variable + ":");
+            
+            // Create context label with "Replace <variable> in:" format
+            Label contextLabel = new Label("Replace " + variable + " in:");
+            contextLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 12px;");
+            
+            // Create context display with rich text formatting
+            TextFlow contextDisplay = createFormattedContext(content, variable);
+            contextDisplay.setMaxWidth(450);
+            
             TextField textField = new TextField();
             textField.setPromptText("Enter " + variable);
-            textField.setPrefColumnCount(20);
+            textField.setPrefColumnCount(25);
             
-            grid.add(label, 0, i);
-            grid.add(textField, 1, i);
+            // Add components to grid with better spacing
+            grid.add(contextLabel, 0, i * 3, 2, 1);
+            grid.add(contextDisplay, 0, i * 3 + 1, 2, 1);
+            grid.add(new Label("Value:"), 0, i * 3 + 2);
+            grid.add(textField, 1, i * 3 + 2);
             textFields.add(textField);
         }
         
@@ -156,6 +172,119 @@ public class VariableReplacer {
         
         Optional<Map<String, String>> result = dialog.showAndWait();
         return result.orElse(null);
+    }
+    
+    /**
+     * Creates a formatted TextFlow showing context around a variable with proper styling.
+     * Shows a few words before and after the variable, with the variable name bolded.
+     * 
+     * @param content The full content containing the variable
+     * @param variableName The name of the variable to find context for
+     * @return TextFlow with formatted context
+     */
+    private static TextFlow createFormattedContext(String content, String variableName) {
+        TextFlow textFlow = new TextFlow();
+        textFlow.setStyle("-fx-padding: 5; -fx-background-color: #f9f9f9; -fx-border-color: #e0e0e0; -fx-border-radius: 3;");
+        
+        if (content == null || variableName == null) {
+            Text fallback = new Text("(" + variableName + ")");
+            fallback.setStyle("-fx-font-weight: bold;");
+            textFlow.getChildren().add(fallback);
+            return textFlow;
+        }
+        
+        // Handle escaped parentheses temporarily
+        String tempContent = content.replace("\\(", "ESCAPED_OPEN_PAREN").replace("\\)", "ESCAPED_CLOSE_PAREN");
+        
+        // Find the variable pattern in the content
+        String variablePattern = "\\(" + Pattern.quote(variableName) + "\\)";
+        Matcher matcher = Pattern.compile(variablePattern).matcher(tempContent);
+        
+        if (!matcher.find()) {
+            Text fallback = new Text("(" + variableName + ")");
+            fallback.setStyle("-fx-font-weight: bold;");
+            textFlow.getChildren().add(fallback);
+            return textFlow;
+        }
+        
+        int variableStart = matcher.start();
+        int variableEnd = matcher.end();
+        
+        // Extract context before and after the variable
+        String beforeContext = extractContextBefore(tempContent, variableStart);
+        String afterContext = extractContextAfter(tempContent, variableEnd);
+        
+        // Restore escaped parentheses in context
+        beforeContext = beforeContext.replace("ESCAPED_OPEN_PAREN", "(").replace("ESCAPED_CLOSE_PAREN", ")");
+        afterContext = afterContext.replace("ESCAPED_OPEN_PAREN", "(").replace("ESCAPED_CLOSE_PAREN", ")");
+        
+        // Create text elements
+        if (!beforeContext.isEmpty()) {
+            Text beforeText = new Text(beforeContext + " ");
+            beforeText.setStyle("-fx-font-size: 11px; -fx-fill: #666666;");
+            textFlow.getChildren().add(beforeText);
+        }
+        
+        // Bold variable name
+        Text variableText = new Text("(" + variableName + ")");
+        variableText.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-fill: #333333;");
+        textFlow.getChildren().add(variableText);
+        
+        if (!afterContext.isEmpty()) {
+            Text afterText = new Text(" " + afterContext);
+            afterText.setStyle("-fx-font-size: 11px; -fx-fill: #666666;");
+            textFlow.getChildren().add(afterText);
+        }
+        
+        return textFlow;
+    }
+    
+    /**
+     * Extracts context before the variable position.
+     */
+    private static String extractContextBefore(String content, int position) {
+        if (position <= 0) return "";
+        
+        String before = content.substring(0, position);
+        
+        // Split into words and take the last few words
+        String[] words = before.trim().split("\\s+");
+        StringBuilder context = new StringBuilder();
+        
+        // Take up to 5 words before, or start from beginning if fewer words
+        int startIndex = Math.max(0, words.length - 5);
+        for (int i = startIndex; i < words.length; i++) {
+            if (context.length() > 0) context.append(" ");
+            context.append(words[i]);
+        }
+        
+        return context.toString();
+    }
+    
+    /**
+     * Extracts context after the variable position.
+     */
+    private static String extractContextAfter(String content, int position) {
+        if (position >= content.length()) return "";
+        
+        String after = content.substring(position);
+        
+        // Split into words and take the first few words
+        String[] words = after.trim().split("\\s+");
+        StringBuilder context = new StringBuilder();
+        
+        // Take up to 5 words after, but if we hit a sentence ending, include it and stop
+        for (int i = 0; i < Math.min(5, words.length); i++) {
+            if (context.length() > 0) context.append(" ");
+            context.append(words[i]);
+            
+            // If this word ends with sentence punctuation, stop here
+            if (words[i].matches(".*[.!?]$")) {
+                break;
+            }
+        }
+        
+        return context.toString();
     }
     
     /**
