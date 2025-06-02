@@ -629,7 +629,18 @@ public class RegexEditorPanel extends BorderPane {
                 
                 if (patternMatches != null) {
                     for (int i = 0; i < patternMatches.size(); i++) {
-                        result.append(processTemplateVariables(loopContent, matches, patternName, i));
+                        String processedLoop = processTemplateVariables(loopContent, matches, patternName, i);
+                        // Remove command-only lines from loop content
+                        processedLoop = removeCommandOnlyLines(processedLoop);
+                        // Trim leading and trailing whitespace from each iteration
+                        processedLoop = processedLoop.trim();
+                        if (!processedLoop.isEmpty()) {
+                            result.append(processedLoop);
+                            // Add newline only if not the last iteration and content exists
+                            if (i < patternMatches.size() - 1) {
+                                result.append("\n");
+                            }
+                        }
                     }
                 }
                 
@@ -651,6 +662,34 @@ public class RegexEditorPanel extends BorderPane {
             else {
                 result.append(template.charAt(pos));
                 pos++;
+            }
+        }
+        
+        // Remove command-only lines from the final result
+        return removeCommandOnlyLines(result.toString());
+    }
+    
+    private String removeCommandOnlyLines(String text) {
+        String[] lines = text.split("\n", -1);
+        StringBuilder result = new StringBuilder();
+        boolean hasContent = false;
+        
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            String trimmedLine = line.trim();
+            
+            // Check if line contains only commands or is empty/whitespace
+            boolean isCommandOnlyLine = trimmedLine.matches("\\{for\\s+\\w+\\}") || 
+                                       trimmedLine.equals("{/for}") ||
+                                       trimmedLine.isEmpty();
+            
+            // If it's not a command-only line, add it to result
+            if (!isCommandOnlyLine) {
+                if (hasContent) {
+                    result.append("\n");
+                }
+                result.append(line);
+                hasContent = true;
             }
         }
         

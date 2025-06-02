@@ -16,6 +16,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.Scene;
 import javafx.beans.property.IntegerProperty;
+import javafx.stage.Stage;
 
 public class MainView {
     
@@ -268,7 +269,24 @@ public class MainView {
             }
         });
         
-        panel.getChildren().add(cssInspectorBtn);
+        // Pin to top toggle button
+        ToggleButton pinBtn = new ToggleButton("📌");
+        pinBtn.setPrefSize(35, 35);
+        SimpleStyler.styleCssInspectorButton(pinBtn);
+        pinBtn.setTooltip(new javafx.scene.control.Tooltip("Pin app to stay on top of other windows"));
+        
+        // Style for selected state
+        ComplexStyler.applyCssInspectorToggleEffect(pinBtn);
+        
+        // Handle pin to top logic
+        pinBtn.selectedProperty().addListener((obs, wasSelected, isSelected) -> {
+            Stage stage = (Stage) root.getScene().getWindow();
+            if (stage != null) {
+                stage.setAlwaysOnTop(isSelected);
+            }
+        });
+        
+        panel.getChildren().addAll(cssInspectorBtn, pinBtn);
         return panel;
     }
     
