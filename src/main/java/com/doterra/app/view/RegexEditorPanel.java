@@ -90,13 +90,16 @@ public class RegexEditorPanel extends BorderPane {
         Button saveAsBtn = new Button("Save As...");
         saveAsBtn.setOnAction(e -> saveAsNewTemplate());
         
+        Button renameBtn = new Button("Rename");
+        renameBtn.setOnAction(e -> renameTemplate());
+        
         Button deleteBtn = new Button("Delete");
         deleteBtn.setOnAction(e -> deleteTemplate());
         
         Button setDefaultBtn = new Button("Set Default");
         setDefaultBtn.setOnAction(e -> setDefaultTemplate());
         
-        templateBar.getChildren().addAll(templateLabel, templateComboBox, saveBtn, saveAsBtn, deleteBtn, setDefaultBtn);
+        templateBar.getChildren().addAll(templateLabel, templateComboBox, saveBtn, saveAsBtn, renameBtn, deleteBtn, setDefaultBtn);
         
         Label inputLabel = new Label("Input Text:");
         inputTextArea = new TextArea();
@@ -270,6 +273,40 @@ public class RegexEditorPanel extends BorderPane {
         refreshTemplateComboBox();
         
         showInfo("'" + currentTemplate.getName() + "' set as default template");
+    }
+    
+    private void renameTemplate() {
+        if (currentTemplate == null) {
+            showAlert("No template selected");
+            return;
+        }
+        
+        TextInputDialog dialog = new TextInputDialog(currentTemplate.getName());
+        dialog.setTitle("Rename Template");
+        dialog.setHeaderText("Enter new template name:");
+        
+        // Configure dialog to be independent and always on top
+        DialogUtil.configureDialog(dialog);
+        dialog.showAndWait().ifPresent(newName -> {
+            if (!newName.trim().isEmpty() && !newName.equals(currentTemplate.getName())) {
+                // Check if name already exists
+                boolean nameExists = templates.stream()
+                    .anyMatch(t -> t != currentTemplate && t.getName().equals(newName));
+                
+                if (nameExists) {
+                    showAlert("A template with that name already exists");
+                    return;
+                }
+                
+                String oldName = currentTemplate.getName();
+                currentTemplate.setName(newName);
+                saveTemplates();
+                refreshTemplateComboBox();
+                templateComboBox.setValue(currentTemplate);
+                
+                showInfo("Template renamed from '" + oldName + "' to '" + newName + "'");
+            }
+        });
     }
     
     private void loadTemplate(RegexTemplate template) {
@@ -688,7 +725,8 @@ public class RegexEditorPanel extends BorderPane {
                 if (hasContent) {
                     result.append("\n");
                 }
-                result.append(line);
+                // Trim leading whitespace from content lines to remove indentation
+                result.append(trimmedLine);
                 hasContent = true;
             }
         }
