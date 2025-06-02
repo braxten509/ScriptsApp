@@ -8,6 +8,7 @@ import javafx.collections.ObservableList;
 import javafx.beans.property.SimpleStringProperty;
 import java.util.regex.*;
 import java.util.*;
+import java.io.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.control.TableCell;
 import javafx.util.Callback;
@@ -21,7 +22,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 
 public class RegexEditorPanel extends BorderPane {
-    private static final String TEMPLATES_FILE = "regex_templates.dat";
+    private static final String TEMPLATES_FILE = "data/regex_templates.dat";
     
     private TextArea inputTextArea;
     private TextArea templateArea;
@@ -331,8 +332,17 @@ public class RegexEditorPanel extends BorderPane {
     }
     
     private void saveTemplates() {
-        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(TEMPLATES_FILE))) {
-            oos.writeObject(templates);
+        try {
+            // Ensure parent directory exists
+            File file = new File(TEMPLATES_FILE);
+            File parentDir = file.getParentFile();
+            if (parentDir != null && !parentDir.exists()) {
+                parentDir.mkdirs();
+            }
+            
+            try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(TEMPLATES_FILE))) {
+                oos.writeObject(templates);
+            }
         } catch (Exception e) {
             e.printStackTrace();
             showAlert("Failed to save templates: " + e.getMessage());

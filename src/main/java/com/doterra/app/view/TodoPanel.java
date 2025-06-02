@@ -41,7 +41,7 @@ public class TodoPanel extends BorderPane {
     private Timeline waitUntilChecker;
     
     // File path for saving todo data
-    private static final String TODO_DATA_FILE = "doterra_todos.dat";
+    private static final String TODO_DATA_FILE = "data/doterra_todos.dat";
     
     // Serializable data classes for persistence
     private static class TodoData implements Serializable {
@@ -283,6 +283,13 @@ public class TodoPanel extends BorderPane {
             }
             
             // Save to file
+            // Ensure parent directory exists
+            File file = new File(TODO_DATA_FILE);
+            File parentDir = file.getParentFile();
+            if (parentDir != null && !parentDir.exists()) {
+                parentDir.mkdirs();
+            }
+            
             try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(TODO_DATA_FILE))) {
                 oos.writeObject(data);
             }

@@ -37,7 +37,7 @@ public class ChatScriptsPanel {
         root = new BorderPane();
         SimpleStyler.applyDefaultLayout(root);
         
-        buttonController = new ButtonController("doterra_chat_buttons.dat");
+        buttonController = new ButtonController("data/doterra_chat_buttons.dat");
         
         // Create tab pane for button categories
         tabPane = new TabPane();

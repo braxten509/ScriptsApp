@@ -15,7 +15,7 @@ public class ButtonController {
     private final String saveFile;
     
     public ButtonController() {
-        this(true, "doterra_buttons.dat");
+        this(true, "data/doterra_buttons.dat");
     }
     
     /**
@@ -31,7 +31,7 @@ public class ButtonController {
      * @param loadState whether to load existing state from file
      */
     public ButtonController(boolean loadState) {
-        this(loadState, "doterra_buttons.dat");
+        this(loadState, "data/doterra_buttons.dat");
     }
     
     /**
@@ -94,10 +94,19 @@ public class ButtonController {
     }
     
     public void saveState() {
-        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(saveFile))) {
-            // Convert to list for serialization
-            List<ButtonTab> tabList = new ArrayList<>(tabs.values());
-            oos.writeObject(tabList);
+        try {
+            // Ensure parent directory exists
+            File file = new File(saveFile);
+            File parentDir = file.getParentFile();
+            if (parentDir != null && !parentDir.exists()) {
+                parentDir.mkdirs();
+            }
+            
+            try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(saveFile))) {
+                // Convert to list for serialization
+                List<ButtonTab> tabList = new ArrayList<>(tabs.values());
+                oos.writeObject(tabList);
+            }
         } catch (IOException e) {
             System.err.println("Error saving button state: " + e.getMessage());
         }

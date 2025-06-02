@@ -43,7 +43,7 @@ public class CalculatorPanel extends BorderPane {
     private ComboBox<String> savedRegexCombo;
     private ComboBox<String> operationCombo;
     private ObservableList<String> savedRegexPatterns;
-    private static final String REGEX_FILE = "calculator_regex_patterns.dat";
+    private static final String REGEX_FILE = "data/calculator_regex_patterns.dat";
     
     private static class NumberNode {
         String value;
@@ -592,8 +592,17 @@ public class CalculatorPanel extends BorderPane {
     }
     
     private void saveRegexPatternsToDisk() {
-        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(REGEX_FILE))) {
-            oos.writeObject(new ArrayList<>(savedRegexPatterns));
+        try {
+            // Ensure parent directory exists
+            File file = new File(REGEX_FILE);
+            File parentDir = file.getParentFile();
+            if (parentDir != null && !parentDir.exists()) {
+                parentDir.mkdirs();
+            }
+            
+            try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(REGEX_FILE))) {
+                oos.writeObject(new ArrayList<>(savedRegexPatterns));
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }

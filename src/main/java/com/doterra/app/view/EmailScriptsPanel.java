@@ -39,7 +39,7 @@ public class EmailScriptsPanel {
         root = new BorderPane();
         SimpleStyler.applyDefaultLayout(root);
         
-        buttonController = new ButtonController("doterra_email_buttons.dat");
+        buttonController = new ButtonController("data/doterra_email_buttons.dat");
         
         // Create tab pane for button categories
         tabPane = new TabPane();
