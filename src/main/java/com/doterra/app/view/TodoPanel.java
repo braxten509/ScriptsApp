@@ -45,7 +45,7 @@ public class TodoPanel extends BorderPane {
     
     // Serializable data classes for persistence
     private static class TodoData implements Serializable {
-        private static final long serialVersionUID = 1L;
+        private static final long serialVersionUID = 2L;
         public List<SerializableTodoTask> activeTasks;
         public List<SerializableCompletedTask> completedTasks;
         
@@ -56,12 +56,14 @@ public class TodoPanel extends BorderPane {
     }
     
     private static class SerializableTodoTask implements Serializable {
-        private static final long serialVersionUID = 1L;
+        private static final long serialVersionUID = 2L;
         public String name;
         public String id;
         public String description;
         public TaskStatus status;
         public LocalDateTime waitUntil;
+        public LocalDateTime lastContacted;
+        public LocalDateTime dateCreated;
         
         public SerializableTodoTask() {}
         
@@ -71,6 +73,8 @@ public class TodoPanel extends BorderPane {
             this.description = task.getDescription();
             this.status = task.getStatus();
             this.waitUntil = task.getWaitUntil();
+            this.lastContacted = task.getLastContacted();
+            this.dateCreated = task.getDateCreated();
         }
     }
     
@@ -98,6 +102,8 @@ public class TodoPanel extends BorderPane {
         private final StringProperty id = new SimpleStringProperty("");
         private final StringProperty description = new SimpleStringProperty("");
         private final ObjectProperty<LocalDateTime> waitUntil = new SimpleObjectProperty<>();
+        private final ObjectProperty<LocalDateTime> lastContacted = new SimpleObjectProperty<>();
+        private final ObjectProperty<LocalDateTime> dateCreated = new SimpleObjectProperty<>(LocalDateTime.now());
         
         public TodoTask() {}
         
@@ -114,6 +120,8 @@ public class TodoPanel extends BorderPane {
         public StringProperty idProperty() { return id; }
         public StringProperty descriptionProperty() { return description; }
         public ObjectProperty<LocalDateTime> waitUntilProperty() { return waitUntil; }
+        public ObjectProperty<LocalDateTime> lastContactedProperty() { return lastContacted; }
+        public ObjectProperty<LocalDateTime> dateCreatedProperty() { return dateCreated; }
         
         // Getters and setters
         public boolean isCompleted() { return completed.get(); }
@@ -133,6 +141,12 @@ public class TodoPanel extends BorderPane {
         
         public LocalDateTime getWaitUntil() { return waitUntil.get(); }
         public void setWaitUntil(LocalDateTime waitUntil) { this.waitUntil.set(waitUntil); }
+        
+        public LocalDateTime getLastContacted() { return lastContacted.get(); }
+        public void setLastContacted(LocalDateTime lastContacted) { this.lastContacted.set(lastContacted); }
+        
+        public LocalDateTime getDateCreated() { return dateCreated.get(); }
+        public void setDateCreated(LocalDateTime dateCreated) { this.dateCreated.set(dateCreated); }
     }
     
     public static class CompletedTask {
@@ -321,6 +335,13 @@ public class TodoPanel extends BorderPane {
                 TodoTask task = new TodoTask(serializable.name, serializable.id, serializable.description);
                 task.setStatus(serializable.status);
                 task.setWaitUntil(serializable.waitUntil);
+                // Handle new fields for backward compatibility
+                if (serializable.lastContacted != null) {
+                    task.setLastContacted(serializable.lastContacted);
+                }
+                if (serializable.dateCreated != null) {
+                    task.setDateCreated(serializable.dateCreated);
+                }
                 activeTasks.add(task);
                 
                 // Add listener for status changes to trigger saves
@@ -328,6 +349,8 @@ public class TodoPanel extends BorderPane {
                 task.nameProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
                 task.idProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
                 task.descriptionProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
+                task.lastContactedProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
+                task.dateCreatedProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
             }
             
             // Load completed tasks
@@ -418,7 +441,10 @@ public class TodoPanel extends BorderPane {
     private void setupActiveTasksTable() {
         // Checkbox column
         TableColumn<TodoTask, Boolean> checkCol = new TableColumn<>("");
-        checkCol.setPrefWidth(50);
+        checkCol.setPrefWidth(25);
+        checkCol.setMinWidth(25);
+        checkCol.setMaxWidth(25);
+        checkCol.setResizable(false);
         checkCol.setCellValueFactory(cellData -> cellData.getValue().completedProperty());
         checkCol.setCellFactory(column -> {
             CheckBoxTableCell<TodoTask, Boolean> cell = new CheckBoxTableCell<TodoTask, Boolean>() {
@@ -445,13 +471,19 @@ public class TodoPanel extends BorderPane {
         
         // Status column with custom cell factory
         TableColumn<TodoTask, TaskStatus> statusCol = new TableColumn<>("Status");
-        statusCol.setPrefWidth(220); // Increased width to accommodate "Wait until" text
+        statusCol.setPrefWidth(150); // Reduced to fit screen
+        statusCol.setMinWidth(150);
+        statusCol.setMaxWidth(150);
+        statusCol.setResizable(false);
         statusCol.setCellValueFactory(cellData -> cellData.getValue().statusProperty());
         statusCol.setCellFactory(column -> new StatusCell());
         
         // Name column
         TableColumn<TodoTask, String> nameCol = new TableColumn<>("Name");
-        nameCol.setPrefWidth(200);
+        nameCol.setPrefWidth(140);
+        nameCol.setMinWidth(140);
+        nameCol.setMaxWidth(140);
+        nameCol.setResizable(false);
         nameCol.setCellValueFactory(cellData -> cellData.getValue().nameProperty());
         nameCol.setCellFactory(column -> new EditableTextCell());
         nameCol.setOnEditCommit(event -> {
@@ -460,23 +492,107 @@ public class TodoPanel extends BorderPane {
         
         // ID column
         TableColumn<TodoTask, String> idCol = new TableColumn<>("ID");
-        idCol.setPrefWidth(100);
+        idCol.setPrefWidth(60);
+        idCol.setMinWidth(60);
+        idCol.setMaxWidth(60);
+        idCol.setResizable(false);
         idCol.setCellValueFactory(cellData -> cellData.getValue().idProperty());
         idCol.setCellFactory(column -> new EditableTextCell());
         idCol.setOnEditCommit(event -> {
             event.getRowValue().setId(event.getNewValue());
         });
         
-        // Description column
-        TableColumn<TodoTask, String> descCol = new TableColumn<>("Description");
-        descCol.setPrefWidth(300);
-        descCol.setCellValueFactory(cellData -> cellData.getValue().descriptionProperty());
-        descCol.setCellFactory(column -> new EditableTextCell());
-        descCol.setOnEditCommit(event -> {
+        // Last Contacted column
+        TableColumn<TodoTask, LocalDateTime> lastContactedCol = new TableColumn<>("Last Contacted");
+        lastContactedCol.setPrefWidth(180);
+        lastContactedCol.setMinWidth(180);
+        lastContactedCol.setMaxWidth(180);
+        lastContactedCol.setResizable(false);
+        lastContactedCol.setCellValueFactory(cellData -> cellData.getValue().lastContactedProperty());
+        lastContactedCol.setCellFactory(column -> new TableCell<TodoTask, LocalDateTime>() {
+            private final Button button = new Button("Update");
+            private final Label label = new Label();
+            private final HBox hbox = new HBox(5);
+            private boolean initialized = false;
+            
+            {
+                // Initialize layout once
+                hbox.setAlignment(Pos.CENTER);
+                hbox.getChildren().addAll(label, button);
+                
+                button.setOnAction(e -> {
+                    if (getIndex() >= 0 && getIndex() < getTableView().getItems().size()) {
+                        TodoTask task = getTableView().getItems().get(getIndex());
+                        task.setLastContacted(LocalDateTime.now());
+                        saveTodoData();
+                    }
+                });
+            }
+            
+            @Override
+            protected void updateItem(LocalDateTime item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) {
+                    setGraphic(null);
+                    initialized = false; // Reset when cell becomes empty
+                } else {
+                    // Only update the label text, don't recreate the layout
+                    if (item == null) {
+                        label.setText("Never");
+                    } else {
+                        label.setText(item.format(DATE_FORMAT));
+                    }
+                    
+                    // Always ensure the graphic is set (handles restore case)
+                    if (getGraphic() != hbox) {
+                        setGraphic(hbox);
+                        setAlignment(Pos.CENTER);
+                    }
+                }
+            }
+        });
+        
+        // Date Created column
+        TableColumn<TodoTask, LocalDateTime> dateCreatedCol = new TableColumn<>("Date Created");
+        dateCreatedCol.setPrefWidth(130);
+        dateCreatedCol.setMinWidth(130);
+        dateCreatedCol.setMaxWidth(130);
+        dateCreatedCol.setResizable(false);
+        dateCreatedCol.setCellValueFactory(cellData -> cellData.getValue().dateCreatedProperty());
+        dateCreatedCol.setCellFactory(column -> new TableCell<TodoTask, LocalDateTime>() {
+            @Override
+            protected void updateItem(LocalDateTime item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                } else {
+                    setText(item.format(DATE_FORMAT));
+                }
+                setAlignment(Pos.CENTER);
+            }
+        });
+        
+        // Details column (renamed from Description)
+        TableColumn<TodoTask, String> detailsCol = new TableColumn<>("Details");
+        detailsCol.setPrefWidth(220);
+        detailsCol.setMinWidth(220);
+        detailsCol.setMaxWidth(220);
+        detailsCol.setResizable(false);
+        detailsCol.setCellValueFactory(cellData -> cellData.getValue().descriptionProperty());
+        detailsCol.setCellFactory(column -> new EditableTextCell());
+        detailsCol.setOnEditCommit(event -> {
             event.getRowValue().setDescription(event.getNewValue());
         });
         
-        activeTasksTable.getColumns().addAll(checkCol, statusCol, nameCol, idCol, descCol);
+        activeTasksTable.getColumns().addAll(checkCol, statusCol, nameCol, idCol, lastContactedCol, dateCreatedCol, detailsCol);
+        
+        // Use a custom resize policy that prevents extra columns while allowing table to fill space
+        activeTasksTable.setColumnResizePolicy(new Callback<TableView.ResizeFeatures, Boolean>() {
+            @Override
+            public Boolean call(TableView.ResizeFeatures param) {
+                return true; // Always return true to prevent default resizing
+            }
+        });
         
         // Enable row selection
         activeTasksTable.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
@@ -581,7 +697,7 @@ public class TodoPanel extends BorderPane {
             timeField.setPrefWidth(60);
             
             container = new HBox(5);
-            container.setAlignment(Pos.CENTER_LEFT);
+            container.setAlignment(Pos.CENTER);
             
             comboBox.setOnAction(e -> {
                 TaskStatus selected = comboBox.getValue();
@@ -742,6 +858,7 @@ public class TodoPanel extends BorderPane {
                 
                 setGraphic(comboBox);
                 setStyle(""); // Clear cell style
+                setAlignment(Pos.CENTER);
             }
         }
         
@@ -947,6 +1064,8 @@ public class TodoPanel extends BorderPane {
         newTask.nameProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
         newTask.idProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
         newTask.descriptionProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
+        newTask.lastContactedProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
+        newTask.dateCreatedProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
         
         activeTasks.add(newTask);
         saveTodoData();
@@ -1014,6 +1133,8 @@ public class TodoPanel extends BorderPane {
         restoredTask.nameProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
         restoredTask.idProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
         restoredTask.descriptionProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
+        restoredTask.lastContactedProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
+        restoredTask.dateCreatedProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
         
         // Remove from completed tasks and add to active tasks
         completedTasks.remove(completedTask);
