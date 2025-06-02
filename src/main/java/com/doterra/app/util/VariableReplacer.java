@@ -12,9 +12,11 @@ import javafx.scene.text.FontWeight;
 import javafx.scene.text.Font;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -29,26 +31,29 @@ public class VariableReplacer {
     private static final Pattern VARIABLE_PATTERN = Pattern.compile("(?<!\\\\)\\(([^)]+)\\)");
     
     /**
-     * Finds all variables in the given content.
+     * Finds all unique variables in the given content.
      * 
      * @param content The content to search for variables
-     * @return List of variable names (without parentheses)
+     * @return List of unique variable names (without parentheses)
      */
     public static List<String> findVariables(String content) {
         List<String> variables = new ArrayList<>();
+        Set<String> uniqueVariables = new LinkedHashSet<>();
         Matcher matcher = VARIABLE_PATTERN.matcher(content);
         
         while (matcher.find()) {
-            variables.add(matcher.group(1));
+            uniqueVariables.add(matcher.group(1));
         }
         
+        variables.addAll(uniqueVariables);
         return variables;
     }
     
     /**
-     * Replaces all variables in the content with user-provided values.
+     * Replaces all variables in the content with user-provided values for display.
      * Shows input dialogs for each variable found.
      * Variables with empty or no values are left as literal text (variable name).
+     * Escaped parentheses remain with backslashes for display purposes.
      * 
      * @param content The original content with variables
      * @param scriptName The name of the script (for dialog titles)
@@ -65,8 +70,8 @@ public class VariableReplacer {
         List<String> variables = findVariables(tempContent);
         
         if (variables.isEmpty()) {
-            // No variables found, just restore escaped parentheses and return
-            return tempContent.replace("ESCAPED_OPEN_PAREN", "(").replace("ESCAPED_CLOSE_PAREN", ")");
+            // No variables found, restore escaped parentheses with backslashes for display
+            return tempContent.replace("ESCAPED_OPEN_PAREN", "\\(").replace("ESCAPED_CLOSE_PAREN", "\\)");
         }
         
         // Prompt user for all variables in a single dialog
@@ -82,18 +87,34 @@ public class VariableReplacer {
         for (String variable : variables) {
             String replacement = variableValues.get(variable);
             if (replacement != null && !replacement.trim().isEmpty()) {
-                // Replace the first occurrence of this variable with the provided value
-                result = result.replaceFirst("(?<!\\\\)\\(" + Pattern.quote(variable) + "\\)", 
+                // Replace ALL occurrences of this variable with the provided value
+                result = result.replaceAll("(?<!\\\\)\\(" + Pattern.quote(variable) + "\\)", 
                                           Matcher.quoteReplacement(replacement));
             }
             // If replacement is null or empty, keep the literal variable text (variable)
             // This allows users to see and edit templates by leaving variables unfilled
         }
         
-        // Restore escaped parentheses
-        result = result.replace("ESCAPED_OPEN_PAREN", "(").replace("ESCAPED_CLOSE_PAREN", ")");
+        // Restore escaped parentheses with backslashes for display
+        result = result.replace("ESCAPED_OPEN_PAREN", "\\(").replace("ESCAPED_CLOSE_PAREN", "\\)");
         
         return result;
+    }
+    
+    /**
+     * Helper method that formats content for clipboard (removes backslashes from escaped parentheses).
+     * This method does NOT prompt for variables - it should only be called on already processed content.
+     * 
+     * @param processedContent Content that has already been processed with replaceVariables()
+     * @return Content with escaped parentheses cleaned for clipboard
+     */
+    public static String formatForClipboard(String processedContent) {
+        if (processedContent == null || processedContent.isEmpty()) {
+            return processedContent;
+        }
+        
+        // Simply remove backslashes from escaped parentheses
+        return processedContent.replace("\\(", "(").replace("\\)", ")");
     }
     
     /**
@@ -108,7 +129,7 @@ public class VariableReplacer {
         Dialog<Map<String, String>> dialog = new Dialog<>();
         dialog.setTitle("Script Variables - " + scriptName);
         dialog.setHeaderText("Enter values for variables:");
-        dialog.initStyle(StageStyle.UTILITY);
+        dialog.initStyle(StageStyle.DECORATED);
         
         // Configure dialog to be independent and always on top
         DialogUtil.configureDialog(dialog);

@@ -232,25 +232,21 @@ public class ChatScriptsPanel {
     private void addButtonsToGrid(GridPane buttonGrid, java.util.List<ScriptButton> buttons, Tab tab) {
         buttonGrid.getChildren().clear();
         
-        int row = 0;
-        int col = 0;
+        int listIndex = 0;
         
-        for (ScriptButton scriptButton : buttons) {
-            if (row >= 6) break; // Don't exceed 6x6 grid
-            
-            Button button = createButtonUI(scriptButton);
-            
-            // No need to bind height here, let grid constraints handle it
-            
-            setupButtonDragAndDrop(button, scriptButton);
-            setupButtonContextMenu(button, scriptButton, tab);
-            
-            buttonGrid.add(button, col, row);
-            
-            col++;
-            if (col >= 6) {
-                col = 0;
-                row++;
+        for (int row = 0; row < 6 && listIndex < buttons.size(); row++) {
+            for (int col = 0; col < 6 && listIndex < buttons.size(); col++) {
+                ScriptButton scriptButton = buttons.get(listIndex);
+                listIndex++;
+                
+                if (scriptButton != null) {
+                    Button button = createButtonUI(scriptButton);
+                    
+                    setupButtonDragAndDrop(button, scriptButton);
+                    setupButtonContextMenu(button, scriptButton, tab);
+                    
+                    buttonGrid.add(button, col, row);
+                }
             }
         }
     }
@@ -259,21 +255,45 @@ public class ChatScriptsPanel {
         ScrollPane scrollPane = (ScrollPane) tab.getContent();
         GridPane buttonGrid = (GridPane) scrollPane.getContent();
         
-        // Find next available position
-        int nextPosition = buttonGrid.getChildren().size();
-        if (nextPosition >= 36) return; // Grid is full
+        // Find the first empty position in the grid
+        boolean[][] occupied = new boolean[6][6];
         
-        int row = nextPosition / 6;
-        int col = nextPosition % 6;
+        // Mark occupied positions
+        for (Node child : buttonGrid.getChildren()) {
+            if (child instanceof Button) {
+                Integer row = GridPane.getRowIndex(child);
+                Integer col = GridPane.getColumnIndex(child);
+                int r = row != null ? row : 0;
+                int c = col != null ? col : 0;
+                if (r < 6 && c < 6) {
+                    occupied[r][c] = true;
+                }
+            }
+        }
+        
+        // Find first empty position
+        int targetRow = -1, targetCol = -1;
+        outer: for (int row = 0; row < 6; row++) {
+            for (int col = 0; col < 6; col++) {
+                if (!occupied[row][col]) {
+                    targetRow = row;
+                    targetCol = col;
+                    break outer;
+                }
+            }
+        }
+        
+        if (targetRow == -1) return; // Grid is full
         
         Button button = createButtonUI(scriptButton);
-        
-        // No need to bind height here, let grid constraints handle it
         
         setupButtonDragAndDrop(button, scriptButton);
         setupButtonContextMenu(button, scriptButton, tab);
         
-        buttonGrid.add(button, col, row);
+        buttonGrid.add(button, targetCol, targetRow);
+        
+        // Update the button order to reflect the new addition
+        updateButtonOrder(buttonGrid);
     }
     
     private Button createButtonUI(ScriptButton scriptButton) {
@@ -302,21 +322,22 @@ public class ChatScriptsPanel {
             textArea.setVisible(true);
             textArea.setManaged(true);
             
-            // Process variables in the script content
+            // Process variables and escaped parentheses in the script content
             String originalContent = scriptButton.getContent();
-            String processedContent = originalContent;
             
-            if (VariableReplacer.hasVariables(originalContent)) {
-                processedContent = VariableReplacer.replaceVariables(originalContent, scriptButton.getName());
-                if (processedContent == null) {
-                    // User cancelled variable input, don't proceed
-                    return;
-                }
+            // Get display content (with backslashes for escaped parentheses)
+            String displayContent = VariableReplacer.replaceVariables(originalContent, scriptButton.getName());
+            if (displayContent == null) {
+                // User cancelled variable input, don't proceed
+                return;
             }
+            
+            // Get clipboard content (remove backslashes from escaped parentheses)
+            String clipboardContent = VariableReplacer.formatForClipboard(displayContent);
             
             // Set flag to indicate this text change is from variable replacement
             isVariableReplacement = true;
-            textArea.setText(processedContent);
+            textArea.setText(displayContent);
             // Store original content for change detection
             this.originalContent = scriptButton.getContent();
             this.contentChanged = false;
@@ -325,7 +346,7 @@ public class ChatScriptsPanel {
             
             // Copy to clipboard
             ClipboardContent content = new ClipboardContent();
-            content.putString(processedContent);
+            content.putString(clipboardContent);
             Clipboard.getSystemClipboard().setContent(content);
             
             // Visual feedback for selection
@@ -575,25 +596,51 @@ public class ChatScriptsPanel {
         ButtonTab buttonTab = buttonController.getTab(currentTab.getId());
         if (buttonTab == null) return;
         
-        // Create new ordered list based on grid positions
-        java.util.List<ScriptButton> newOrder = new java.util.ArrayList<>();
+        // Create a sparse array to maintain grid positions
+        ScriptButton[] gridArray = new ScriptButton[36]; // 6x6 grid
         
-        for (int row = 0; row < 6; row++) {
-            for (int col = 0; col < 6; col++) {
-                for (Node child : grid.getChildren()) {
-                    if (child instanceof Button) {
-                        Integer childRow = GridPane.getRowIndex(child);
-                        Integer childCol = GridPane.getColumnIndex(child);
-                        if ((childRow == null ? 0 : childRow) == row && 
-                            (childCol == null ? 0 : childCol) == col) {
-                            Button btn = (Button) child;
-                            if (btn.getUserData() instanceof ScriptButton) {
-                                newOrder.add((ScriptButton) btn.getUserData());
-                            }
-                        }
-                    }
+        // Place buttons in their grid positions
+        for (Node child : grid.getChildren()) {
+            if (child instanceof Button) {
+                Button btn = (Button) child;
+                if (btn.getUserData() instanceof ScriptButton) {
+                    ScriptButton scriptBtn = (ScriptButton) btn.getUserData();
+                    Integer row = GridPane.getRowIndex(child);
+                    Integer col = GridPane.getColumnIndex(child);
+                    int r = row != null ? row : 0;
+                    int c = col != null ? col : 0;
+                    int linearIndex = r * 6 + c;
+                    gridArray[linearIndex] = scriptBtn;
                 }
             }
+        }
+        
+        // Create new ordered list from the sparse array (INCLUDING nulls to preserve positions)
+        java.util.List<ScriptButton> newOrder = new java.util.ArrayList<>();
+        
+        // Find the visual extent of the buttons (rightmost and bottommost positions)
+        int maxRow = -1;
+        int maxCol = -1;
+        for (int i = 0; i < 36; i++) {
+            if (gridArray[i] != null) {
+                int row = i / 6;
+                int col = i % 6;
+                if (row > maxRow) maxRow = row;
+                if (col > maxCol) maxCol = col;
+            }
+        }
+        
+        // Calculate how many positions we need to save to preserve the visual layout
+        // We need to save up to the end of the row containing the bottommost button
+        int positionsToSave = 0;
+        if (maxRow >= 0) {
+            // Save complete rows up to and including the row with the last button
+            positionsToSave = (maxRow + 1) * 6;
+        }
+        
+        // Add buttons including nulls for empty positions
+        for (int i = 0; i < positionsToSave; i++) {
+            newOrder.add(gridArray[i]); // This can be null!
         }
         
         // Update the button tab with new order
