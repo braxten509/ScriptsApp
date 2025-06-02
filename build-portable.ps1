@@ -5,6 +5,15 @@ param(
     [string]$OutputDir = "doTERRA-Portable"
 )
 
+# Error handling
+$ErrorActionPreference = "Stop"
+trap {
+    Write-Host "`nError occurred: $_" -ForegroundColor Red
+    Write-Host "`nPress any key to exit..." -ForegroundColor Yellow
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    exit 1
+}
+
 Write-Host "Building doTERRA App Portable Distribution..." -ForegroundColor Green
 
 # Clean previous build
@@ -51,12 +60,17 @@ if (-not (Test-Path $jreZip)) {
 
 # Extract JRE
 Write-Host "Extracting JRE..." -ForegroundColor Yellow
-Expand-Archive -Path $jreZip -DestinationPath "$OutputDir\jre" -Force
-# Move contents up one directory level
-$jreSubDir = Get-ChildItem -Path "$OutputDir\jre" -Directory | Select-Object -First 1
-if ($jreSubDir) {
-    Get-ChildItem -Path $jreSubDir.FullName -Force | Move-Item -Destination "$OutputDir\jre" -Force
-    Remove-Item $jreSubDir.FullName -Force
+try {
+    Expand-Archive -Path $jreZip -DestinationPath "$OutputDir\jre" -Force
+    # Move contents up one directory level
+    $jreSubDir = Get-ChildItem -Path "$OutputDir\jre" -Directory | Select-Object -First 1
+    if ($jreSubDir) {
+        Get-ChildItem -Path $jreSubDir.FullName -Force | Move-Item -Destination "$OutputDir\jre" -Force
+        Remove-Item $jreSubDir.FullName -Force -Recurse
+    }
+} catch {
+    Write-Host "Failed to extract JRE: $_" -ForegroundColor Red
+    throw
 }
 
 # Download JavaFX if not exists
@@ -77,14 +91,24 @@ if (-not (Test-Path $javafxZip)) {
 
 # Extract JavaFX
 Write-Host "Extracting JavaFX..." -ForegroundColor Yellow
-Expand-Archive -Path $javafxZip -DestinationPath "temp-javafx" -Force
-# Copy only the necessary files
-$javafxDir = Get-ChildItem -Path "temp-javafx" -Directory -Filter "javafx-sdk-*" | Select-Object -First 1
-if ($javafxDir) {
-    Copy-Item "$($javafxDir.FullName)\lib\*" "$OutputDir\javafx\" -Force
-    Copy-Item "$($javafxDir.FullName)\bin\*" "$OutputDir\javafx\" -Force -ErrorAction SilentlyContinue
+try {
+    Expand-Archive -Path $javafxZip -DestinationPath "temp-javafx" -Force
+    # Copy only the necessary files
+    $javafxDir = Get-ChildItem -Path "temp-javafx" -Directory -Filter "javafx-sdk-*" | Select-Object -First 1
+    if ($javafxDir) {
+        Copy-Item "$($javafxDir.FullName)\lib\*" "$OutputDir\javafx\" -Force
+        Copy-Item "$($javafxDir.FullName)\bin\*" "$OutputDir\javafx\" -Force -ErrorAction SilentlyContinue
+    } else {
+        throw "JavaFX SDK directory not found in extracted files"
+    }
+    Remove-Item "temp-javafx" -Recurse -Force
+} catch {
+    Write-Host "Failed to extract JavaFX: $_" -ForegroundColor Red
+    if (Test-Path "temp-javafx") {
+        Remove-Item "temp-javafx" -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    throw
 }
-Remove-Item "temp-javafx" -Recurse -Force
 
 # Create launcher batch file
 Write-Host "Creating launcher..." -ForegroundColor Yellow
@@ -241,3 +265,7 @@ Write-Host "3. No Java or JavaFX installation required!" -ForegroundColor White
 # Calculate folder size
 $folderSize = (Get-ChildItem $OutputDir -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB
 Write-Host "`nTotal size: $([math]::Round($folderSize, 2)) MB" -ForegroundColor Gray
+
+# Keep window open
+Write-Host "`nPress any key to exit..." -ForegroundColor Yellow
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
