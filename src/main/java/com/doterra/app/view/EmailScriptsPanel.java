@@ -64,7 +64,7 @@ public class EmailScriptsPanel {
         addButton.setOnAction(e -> showCreateButtonDialog());
         
         HBox controls = new HBox(10, addButton);
-        controls.setPadding(new Insets(5, 0, 5, 0));
+        controls.setPadding(new Insets(10, 10, 10, 10)); // Move button away from border
         controls.setAlignment(Pos.CENTER_LEFT);
         
         // Build UI
@@ -72,6 +72,10 @@ public class EmailScriptsPanel {
         
         VBox centerSection = new VBox(5, controls, tabPane);
         VBox.setVgrow(tabPane, Priority.ALWAYS);
+        
+        // Initially hide the HTML editor
+        htmlEditor.setVisible(false);
+        htmlEditor.setManaged(false);
         
         // Create a SplitPane for resizable HTML editor
         SplitPane splitPane = new SplitPane();
@@ -122,6 +126,8 @@ public class EmailScriptsPanel {
                     clearButtonSelection();
                     selectedButton = null;
                     htmlEditor.setHtmlText("");
+                    htmlEditor.setVisible(false);
+                    htmlEditor.setManaged(false);
                     originalContent = null;
                     contentChanged = false;
                     isVariableReplacement = false;
@@ -287,6 +293,10 @@ public class EmailScriptsPanel {
             }
             
             selectedButton = scriptButton;
+            
+            // Show the HTML editor for editing
+            htmlEditor.setVisible(true);
+            htmlEditor.setManaged(true);
             
             // Process variables in the script content
             String originalContent = scriptButton.getContent();
@@ -789,6 +799,8 @@ public class EmailScriptsPanel {
             if (selectedButton == scriptButton) {
                 selectedButton = null;
                 htmlEditor.setHtmlText("");
+                htmlEditor.setVisible(false);
+                htmlEditor.setManaged(false);
             }
             
             buttonController.saveState();
@@ -889,6 +901,8 @@ public class EmailScriptsPanel {
                     buttonController.removeButtonFromTab(currentTab.getId(), selectedButton.getId());
                     selectedButton = null;
                     htmlEditor.setHtmlText("");
+                    htmlEditor.setVisible(false);
+                    htmlEditor.setManaged(false);
                     buttonController.saveState();
                 }
                 e.consume();
@@ -963,6 +977,8 @@ public class EmailScriptsPanel {
                             
                             // Select the new button
                             selectedButton = newButton;
+                            htmlEditor.setVisible(true);
+                            htmlEditor.setManaged(true);
                             originalContent = currentHtml;
                             contentChanged = false;
                             

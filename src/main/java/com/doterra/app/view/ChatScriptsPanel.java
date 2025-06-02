@@ -69,7 +69,7 @@ public class ChatScriptsPanel {
         addButton.setOnAction(e -> showCreateButtonDialog());
         
         HBox controls = new HBox(10, addButton);
-        controls.setPadding(new Insets(5, 0, 5, 0));
+        controls.setPadding(new Insets(10, 10, 10, 10)); // Move button away from border
         controls.setAlignment(Pos.CENTER_LEFT);
         
         // Build UI
@@ -77,6 +77,10 @@ public class ChatScriptsPanel {
         
         VBox centerSection = new VBox(5, controls, tabPane);
         VBox.setVgrow(tabPane, Priority.ALWAYS);
+        
+        // Initially hide the text area
+        textArea.setVisible(false);
+        textArea.setManaged(false);
         
         // Create a SplitPane for resizable text area
         SplitPane splitPane = new SplitPane();
@@ -126,6 +130,8 @@ public class ChatScriptsPanel {
                     clearButtonSelection();
                     selectedButton = null;
                     textArea.clear();
+                    textArea.setVisible(false);
+                    textArea.setManaged(false);
                     originalContent = null;
                     contentChanged = false;
                     isVariableReplacement = false;
@@ -291,6 +297,10 @@ public class ChatScriptsPanel {
             }
             
             selectedButton = scriptButton;
+            
+            // Show the text area for editing
+            textArea.setVisible(true);
+            textArea.setManaged(true);
             
             // Process variables in the script content
             String originalContent = scriptButton.getContent();
@@ -791,6 +801,8 @@ public class ChatScriptsPanel {
             if (selectedButton == scriptButton) {
                 selectedButton = null;
                 textArea.clear();
+                textArea.setVisible(false);
+                textArea.setManaged(false);
             }
             
             buttonController.saveState();
@@ -891,6 +903,8 @@ public class ChatScriptsPanel {
                     buttonController.removeButtonFromTab(currentTab.getId(), selectedButton.getId());
                     selectedButton = null;
                     textArea.clear();
+                    textArea.setVisible(false);
+                    textArea.setManaged(false);
                     buttonController.saveState();
                 }
                 e.consume();
@@ -965,6 +979,8 @@ public class ChatScriptsPanel {
                             
                             // Select the new button
                             selectedButton = newButton;
+                            textArea.setVisible(true);
+                            textArea.setManaged(true);
                             originalContent = currentText;
                             contentChanged = false;
                             
