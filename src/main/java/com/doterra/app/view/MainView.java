@@ -32,6 +32,9 @@ public class MainView {
     private final TodoPanel todoPanel;
     private final StickyNotePanel stickyNotePanel;
     
+    // Track active button
+    private Button activeNavButton;
+    
     public MainView() {
         root = new BorderPane();
         
@@ -71,23 +74,44 @@ public class MainView {
         
         // Navigation buttons
         Button chatScriptsBtn = createNavButton("Chat Scripts");
-        chatScriptsBtn.setOnAction(e -> navigationController.showPanel("chat"));
+        chatScriptsBtn.setOnAction(e -> {
+            setActiveButton(chatScriptsBtn);
+            navigationController.showPanel("chat");
+        });
         
         Button emailScriptsBtn = createNavButton("Email Scripts");
-        emailScriptsBtn.setOnAction(e -> navigationController.showPanel("email"));
+        emailScriptsBtn.setOnAction(e -> {
+            setActiveButton(emailScriptsBtn);
+            navigationController.showPanel("email");
+        });
         
         Button regexEditorBtn = createNavButton("Regex Editor");
-        regexEditorBtn.setOnAction(e -> navigationController.showPanel("regex"));
+        regexEditorBtn.setOnAction(e -> {
+            setActiveButton(regexEditorBtn);
+            navigationController.showPanel("regex");
+        });
         
         Button calculatorBtn = createNavButton("Calculator");
-        calculatorBtn.setOnAction(e -> navigationController.showPanel("calculator"));
+        calculatorBtn.setOnAction(e -> {
+            setActiveButton(calculatorBtn);
+            navigationController.showPanel("calculator");
+        });
         
         StackPane todoBtnContainer = createNavButtonWithBadge("Todo", todoPanel.readyTodoCountProperty());
         Button todoBtn = (Button) todoBtnContainer.getChildren().get(0);
-        todoBtn.setOnAction(e -> navigationController.showPanel("todo"));
+        todoBtn.setOnAction(e -> {
+            setActiveButton(todoBtn);
+            navigationController.showPanel("todo");
+        });
         
         Button stickyNoteBtn = createNavButton("Sticky Notes");
-        stickyNoteBtn.setOnAction(e -> navigationController.showPanel("stickynote"));
+        stickyNoteBtn.setOnAction(e -> {
+            setActiveButton(stickyNoteBtn);
+            navigationController.showPanel("stickynote");
+        });
+        
+        // Set initial active button
+        setActiveButton(chatScriptsBtn);
         
         // Add spacer to push content to top
         VBox spacer = new VBox();
@@ -106,8 +130,17 @@ public class MainView {
         button.setPrefHeight(40);
         SimpleStyler.styleNavigationButton(button);
         
-        // Add hover effect
-        ComplexStyler.applyNavigationButtonHoverEffect(button);
+        // Add hover effect that respects active state
+        button.setOnMouseEntered(e -> {
+            if (button != activeNavButton) {
+                button.setStyle(SimpleStyler.NAV_BUTTON_HOVER_STYLE);
+            }
+        });
+        button.setOnMouseExited(e -> {
+            if (button != activeNavButton) {
+                button.setStyle(SimpleStyler.NAV_BUTTON_STYLE);
+            }
+        });
             
         return button;
     }
@@ -121,8 +154,17 @@ public class MainView {
         button.setPrefHeight(40);
         SimpleStyler.styleNavigationButton(button);
         
-        // Add hover effect
-        ComplexStyler.applyNavigationButtonHoverEffect(button);
+        // Add hover effect that respects active state
+        button.setOnMouseEntered(e -> {
+            if (button != activeNavButton) {
+                button.setStyle(SimpleStyler.NAV_BUTTON_HOVER_STYLE);
+            }
+        });
+        button.setOnMouseExited(e -> {
+            if (button != activeNavButton) {
+                button.setStyle(SimpleStyler.NAV_BUTTON_STYLE);
+            }
+        });
         
         // Create badge label
         Label badge = new Label();
@@ -164,6 +206,33 @@ public class MainView {
         buttonContainer.setMaxWidth(Double.MAX_VALUE);
         
         return buttonContainer;
+    }
+    
+    private void setActiveButton(Button button) {
+        // Remove active style from previous button
+        if (activeNavButton != null) {
+            activeNavButton.getStyleClass().remove("nav-button-active");
+            // Reapply normal style
+            SimpleStyler.styleNavigationButton(activeNavButton);
+        }
+        
+        // Set new active button
+        activeNavButton = button;
+        
+        // Apply active style
+        if (activeNavButton != null) {
+            activeNavButton.getStyleClass().add("nav-button-active");
+            activeNavButton.setStyle(
+                "-fx-background-color: #2196F3; " +  // Bright blue for active state
+                "-fx-text-fill: white; " +
+                "-fx-font-size: 14px; " +
+                "-fx-font-weight: bold; " +  // Bold text for active
+                "-fx-padding: 10 15; " +
+                "-fx-background-radius: 5; " +
+                "-fx-cursor: hand; " +
+                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 5, 0, 0, 2);"  // Subtle shadow
+            );
+        }
     }
     
     private HBox createFeaturePanel() {

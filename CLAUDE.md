@@ -7,12 +7,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 A JavaFX desktop application for managing doTERRA scripts for chat and email communications. The app provides a professional interface for customer service representatives to quickly access and copy pre-written responses.
 
 ### Core Features
-- **Dual-panel system**: Chat Scripts (plain text) and Email Scripts (rich HTML)
+- **Multi-panel system**: Chat Scripts (plain text), Email Scripts (rich HTML), TODO management, Calculator, Regex Editor, and Sticky Notes
 - **Hierarchical organization**: Tabs contain buttons, buttons store scripts
 - **Drag-and-drop interface**: Reorder buttons within/between tabs, reorder tabs
 - **Variable templates**: Use (variable) syntax for dynamic content replacement
 - **Customization**: Button colors, tab names, script content
-- **Persistence**: Automatic state saving to `doterra_buttons.dat`
+- **Persistence**: Automatic state saving to separate data files per feature
 - **Context menus**: Right-click management for buttons and tabs
 - **Visual feedback**: Highlighted drop zones during drag operations
 
@@ -29,6 +29,16 @@ mvn javafx:run
 # Run the built JAR file
 java -jar target/doTERRAApp20-2.0.0.jar
 ```
+
+### Portable Distribution
+```bash
+# Build portable Windows distribution (PowerShell)
+.\build-portable.ps1
+
+# Build portable Windows distribution (Command Prompt)
+build-portable.bat
+```
+The portable build creates a complete distribution in `doTERRA-Portable/` with bundled JRE and launcher scripts.
 
 ### Testing
 ```bash
@@ -61,8 +71,12 @@ mvn test -Dmaven.surefire.debug
 
 ### Key Components
 - `MainView` - Root BorderPane with sidebar navigation and content area
-- `NavigationController` - Manages switching between Chat and Email panels
-- `ChatScriptsPanel` & `EmailScriptsPanel` - Content panels with drag-and-drop support
+- `NavigationController` - Manages switching between all application panels
+- `ChatScriptsPanel` & `EmailScriptsPanel` - Script management panels with drag-and-drop support
+- `TodoPanel` - Task management with persistent TODO list
+- `CalculatorPanel` - Built-in calculator functionality
+- `RegexEditorPanel` - Regular expression testing and template management
+- `StickyNotePanel` - Persistent notes management
 - `ButtonController` - Manages tabs and buttons, handles reordering operations
 - `ButtonTab` - Model for organizing script buttons into tabs
 - `ScriptButton` - Model for individual script buttons with content and styling
@@ -71,7 +85,12 @@ mvn test -Dmaven.surefire.debug
 - **Button Reordering**: Buttons can be dragged within tabs and between tabs
 - **Tab Reordering**: Tab headers support drag-and-drop for reorganization
 - **Visual Feedback**: Drop zones highlighted during drag operations
-- **State Persistence**: Chat scripts saved to `doterra_chat_buttons.dat`, Email scripts saved to `doterra_email_buttons.dat`
+- **State Persistence**: Each feature has its own data file:
+  - Chat scripts: `doterra_chat_buttons.dat`
+  - Email scripts: `doterra_email_buttons.dat`
+  - TODO items: `doterra_todos.dat`
+  - Regex templates: `regex_templates.dat`
+  - Sticky notes: `sticky_notes.dat`
 
 ### UI Framework
 - **JavaFX 17.0.6** with additional libraries:

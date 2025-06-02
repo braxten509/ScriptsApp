@@ -26,7 +26,6 @@ import java.time.format.DateTimeFormatter;
 public class StickyNotePanel extends VBox {
     
     private static final String STICKY_NOTES_FILE = "data/sticky_notes.dat";
-    private static final String OLD_STICKY_NOTE_FILE = "data/sticky_note.txt";
     private ObservableList<StickyNote> stickyNotes;
     private Map<String, Stage> openWindows;
     private Map<String, TextArea> noteTextAreas;
@@ -82,6 +81,7 @@ public class StickyNotePanel extends VBox {
         TableColumn<StickyNote, String> titleColumn = new TableColumn<>("Title");
         titleColumn.setCellValueFactory(new PropertyValueFactory<>("title"));
         titleColumn.setPrefWidth(200);
+        titleColumn.setStyle("-fx-alignment: CENTER;");
         
         TableColumn<StickyNote, String> modifiedColumn = new TableColumn<>("Last Modified");
         modifiedColumn.setCellValueFactory(cellData -> {
@@ -90,9 +90,11 @@ public class StickyNotePanel extends VBox {
             );
         });
         modifiedColumn.setPrefWidth(150);
+        modifiedColumn.setStyle("-fx-alignment: CENTER;");
         
         TableColumn<StickyNote, Void> actionsColumn = new TableColumn<>("Actions");
-        actionsColumn.setPrefWidth(200);
+        actionsColumn.setPrefWidth(280);
+        actionsColumn.setStyle("-fx-alignment: CENTER;");
         
         Callback<TableColumn<StickyNote, Void>, TableCell<StickyNote, Void>> cellFactory = 
             new Callback<TableColumn<StickyNote, Void>, TableCell<StickyNote, Void>>() {
@@ -100,17 +102,24 @@ public class StickyNotePanel extends VBox {
             public TableCell<StickyNote, Void> call(final TableColumn<StickyNote, Void> param) {
                 final TableCell<StickyNote, Void> cell = new TableCell<StickyNote, Void>() {
                     private final Button openBtn = new Button("Open");
+                    private final Button renameBtn = new Button("Rename");
                     private final Button deleteBtn = new Button("Delete");
                     private final Button colorBtn = new Button("Color");
                     
                     {
                         openBtn.setStyle("-fx-background-color: #2196F3; -fx-text-fill: white; -fx-padding: 5 10;");
+                        renameBtn.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white; -fx-padding: 5 10;");
                         deleteBtn.setStyle("-fx-background-color: #f44336; -fx-text-fill: white; -fx-padding: 5 10;");
                         colorBtn.setStyle("-fx-background-color: #FF9800; -fx-text-fill: white; -fx-padding: 5 10;");
                         
                         openBtn.setOnAction(e -> {
                             StickyNote note = getTableView().getItems().get(getIndex());
                             openStickyNote(note);
+                        });
+                        
+                        renameBtn.setOnAction(e -> {
+                            StickyNote note = getTableView().getItems().get(getIndex());
+                            renameNote(note);
                         });
                         
                         deleteBtn.setOnAction(e -> {
@@ -131,7 +140,8 @@ public class StickyNotePanel extends VBox {
                             setGraphic(null);
                         } else {
                             HBox buttons = new HBox(5);
-                            buttons.getChildren().addAll(openBtn, colorBtn, deleteBtn);
+                            buttons.setAlignment(Pos.CENTER);
+                            buttons.getChildren().addAll(openBtn, renameBtn, colorBtn, deleteBtn);
                             setGraphic(buttons);
                         }
                     }
@@ -145,18 +155,17 @@ public class StickyNotePanel extends VBox {
         notesTable.getColumns().addAll(titleColumn, modifiedColumn, actionsColumn);
         notesTable.setItems(stickyNotes);
         
-        // Import old note button (if old file exists)
-        Button importOldButton = new Button("Import Old Sticky Note");
-        importOldButton.setStyle(
-            "-fx-background-color: #9C27B0; " +
-            "-fx-text-fill: white; " +
-            "-fx-font-size: 12px; " +
-            "-fx-padding: 6 12; " +
-            "-fx-background-radius: 5;"
-        );
-        importOldButton.setOnAction(e -> importOldStickyNote());
+        // Add double-click handler to open notes
+        notesTable.setOnMouseClicked(event -> {
+            if (event.getClickCount() == 2) {
+                StickyNote selectedNote = notesTable.getSelectionModel().getSelectedItem();
+                if (selectedNote != null) {
+                    openStickyNote(selectedNote);
+                }
+            }
+        });
         
-        getChildren().addAll(titleLabel, createNoteBox, importOldButton, notesTable);
+        getChildren().addAll(titleLabel, createNoteBox, notesTable);
     }
     
     private void createNewNote(String title) {
@@ -168,7 +177,13 @@ public class StickyNotePanel extends VBox {
     
     private void openStickyNote(StickyNote note) {
         if (openWindows.containsKey(note.getId()) && openWindows.get(note.getId()).isShowing()) {
-            openWindows.get(note.getId()).toFront();
+            Stage window = openWindows.get(note.getId());
+            // Restore window if it's minimized
+            if (window.isIconified()) {
+                window.setIconified(false);
+            }
+            window.toFront();
+            window.requestFocus();
             return;
         }
         
@@ -176,12 +191,6 @@ public class StickyNotePanel extends VBox {
         stickyWindow.initStyle(StageStyle.DECORATED);
         stickyWindow.setTitle(note.getTitle());
         stickyWindow.setAlwaysOnTop(true);
-        
-        // Set position and size from note
-        stickyWindow.setX(note.getX());
-        stickyWindow.setY(note.getY());
-        stickyWindow.setWidth(note.getWidth());
-        stickyWindow.setHeight(note.getHeight());
         
         // Create the text area for the note
         TextArea stickyTextArea = new TextArea(note.getContent());
@@ -199,34 +208,62 @@ public class StickyNotePanel extends VBox {
             Platform.runLater(() -> saveStickyNotes());
         });
         
-        // Save position when window moves
-        stickyWindow.xProperty().addListener((obs, oldVal, newVal) -> {
-            note.setX(newVal.doubleValue());
-            saveStickyNotes();
-        });
-        
-        stickyWindow.yProperty().addListener((obs, oldVal, newVal) -> {
-            note.setY(newVal.doubleValue());
-            saveStickyNotes();
-        });
-        
-        stickyWindow.widthProperty().addListener((obs, oldVal, newVal) -> {
-            note.setWidth(newVal.doubleValue());
-            saveStickyNotes();
-        });
-        
-        stickyWindow.heightProperty().addListener((obs, oldVal, newVal) -> {
-            note.setHeight(newVal.doubleValue());
-            saveStickyNotes();
-        });
-        
         VBox noteLayout = new VBox();
         noteLayout.setPadding(new Insets(5));
         noteLayout.getChildren().add(stickyTextArea);
         VBox.setVgrow(stickyTextArea, Priority.ALWAYS);
         
-        Scene scene = new Scene(noteLayout);
+        // Set position and size from note with validation
+        double width = note.getWidth() > 0 ? note.getWidth() : 300;
+        double height = note.getHeight() > 0 ? note.getHeight() : 400;
+        
+        // Ensure window is on screen
+        double x = note.getX();
+        double y = note.getY();
+        if (x < 0) x = 100;
+        if (y < 0) y = 100;
+        
+        Scene scene = new Scene(noteLayout, width - 10, height - 35); // Account for window decorations
         stickyWindow.setScene(scene);
+        
+        // Set minimum size to ensure window is visible
+        stickyWindow.setMinWidth(250);
+        stickyWindow.setMinHeight(200);
+        
+        // Set window position
+        stickyWindow.setX(x);
+        stickyWindow.setY(y);
+        
+        // Save position when window moves (after initial setup)
+        Platform.runLater(() -> {
+            stickyWindow.xProperty().addListener((obs, oldVal, newVal) -> {
+                if (newVal != null && newVal.doubleValue() >= 0) {
+                    note.setX(newVal.doubleValue());
+                    saveStickyNotes();
+                }
+            });
+            
+            stickyWindow.yProperty().addListener((obs, oldVal, newVal) -> {
+                if (newVal != null && newVal.doubleValue() >= 0) {
+                    note.setY(newVal.doubleValue());
+                    saveStickyNotes();
+                }
+            });
+            
+            stickyWindow.widthProperty().addListener((obs, oldVal, newVal) -> {
+                if (newVal != null && newVal.doubleValue() > 0) {
+                    note.setWidth(newVal.doubleValue());
+                    saveStickyNotes();
+                }
+            });
+            
+            stickyWindow.heightProperty().addListener((obs, oldVal, newVal) -> {
+                if (newVal != null && newVal.doubleValue() > 0) {
+                    note.setHeight(newVal.doubleValue());
+                    saveStickyNotes();
+                }
+            });
+        });
         
         // Keep window on top when it loses focus
         stickyWindow.focusedProperty().addListener((obs, wasFocused, isNowFocused) -> {
@@ -243,12 +280,39 @@ public class StickyNotePanel extends VBox {
         openWindows.put(note.getId(), stickyWindow);
         noteTextAreas.put(note.getId(), stickyTextArea);
         
+        // Show window and ensure it's visible
         stickyWindow.show();
-        stickyWindow.toFront();
-        stickyWindow.setAlwaysOnTop(true);
+        Platform.runLater(() -> {
+            stickyWindow.toFront();
+            stickyWindow.setAlwaysOnTop(true);
+            stickyWindow.requestFocus();
+        });
         
         // Refresh table to show updated last modified time
         notesTable.refresh();
+    }
+    
+    private void renameNote(StickyNote note) {
+        TextInputDialog dialog = new TextInputDialog(note.getTitle());
+        dialog.setTitle("Rename Note");
+        dialog.setHeaderText("Rename '" + note.getTitle() + "'");
+        dialog.setContentText("New title:");
+        
+        Optional<String> result = dialog.showAndWait();
+        result.ifPresent(newTitle -> {
+            if (!newTitle.trim().isEmpty()) {
+                note.setTitle(newTitle.trim());
+                saveStickyNotes();
+                
+                // Update window title if open
+                if (openWindows.containsKey(note.getId())) {
+                    openWindows.get(note.getId()).setTitle(newTitle.trim());
+                }
+                
+                // Refresh table to show updated title
+                notesTable.refresh();
+            }
+        });
     }
     
     private void deleteNote(StickyNote note) {
@@ -325,37 +389,6 @@ public class StickyNotePanel extends VBox {
         });
     }
     
-    private void importOldStickyNote() {
-        try {
-            Path oldFilePath = Paths.get(OLD_STICKY_NOTE_FILE);
-            if (Files.exists(oldFilePath)) {
-                String content = Files.readString(oldFilePath);
-                if (!content.trim().isEmpty()) {
-                    StickyNote importedNote = new StickyNote("Imported Note");
-                    importedNote.setContent(content);
-                    stickyNotes.add(importedNote);
-                    saveStickyNotes();
-                    
-                    Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                    alert.setTitle("Import Successful");
-                    alert.setHeaderText(null);
-                    alert.setContentText("Old sticky note has been imported successfully!");
-                    alert.showAndWait();
-                    
-                    // Delete old file after successful import
-                    Files.delete(oldFilePath);
-                }
-            } else {
-                Alert alert = new Alert(Alert.AlertType.WARNING);
-                alert.setTitle("No Old Note Found");
-                alert.setHeaderText(null);
-                alert.setContentText("No old sticky note file found to import.");
-                alert.showAndWait();
-            }
-        } catch (IOException e) {
-            System.err.println("Error importing old sticky note: " + e.getMessage());
-        }
-    }
     
     private void saveStickyNotes() {
         try {

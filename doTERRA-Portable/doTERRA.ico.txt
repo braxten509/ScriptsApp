@@ -1,0 +1,2 @@
+# doTERRA App Icon
+# Place a proper icon file here named doTERRA.ico

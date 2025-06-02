@@ -30,9 +30,9 @@
             <id>default-cli</id>
             <configuration>
               <mainClass>${main.class}</mainClass>
-              <launcher>app</launcher>
-              <jlinkZipName>app</jlinkZipName>
-              <jlinkImageName>app</jlinkImageName>
+              <launcher>doTERRA</launcher>
+              <jlinkZipName>doTERRA-app</jlinkZipName>
+              <jlinkImageName>doTERRA</jlinkImageName>
               <noManPages>true</noManPages>
               <stripDebug>true</stripDebug>
               <noHeaderFiles>true</noHeaderFiles>
@@ -90,7 +90,7 @@
             <configuration>
               <transformers>
                 <transformer>
-                  <mainClass>${main.class}</mainClass>
+                  <mainClass>com.doterra.app.DoTerraAppLauncher</mainClass>
                 </transformer>
               </transformers>
             </configuration>

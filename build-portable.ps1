@@ -96,7 +96,8 @@ try {
     # Copy only the necessary files
     $javafxDir = Get-ChildItem -Path "temp-javafx" -Directory -Filter "javafx-sdk-*" | Select-Object -First 1
     if ($javafxDir) {
-        Copy-Item "$($javafxDir.FullName)\lib\*" "$OutputDir\javafx\" -Force
+        # Copy all files except javafx.swing.jar
+        Get-ChildItem "$($javafxDir.FullName)\lib\*" | Where-Object { $_.Name -ne "javafx.swing.jar" } | Copy-Item -Destination "$OutputDir\javafx\" -Force
         Copy-Item "$($javafxDir.FullName)\bin\*" "$OutputDir\javafx\" -Force -ErrorAction SilentlyContinue
     } else {
         throw "JavaFX SDK directory not found in extracted files"
@@ -139,10 +140,10 @@ if not exist "%APP_JAR%" (
     exit /b 1
 )
 
-REM Launch the application
+REM Launch the application (removed javafx.swing module)
 "%JRE_HOME%\bin\java.exe" ^
     --module-path "%JAVAFX_PATH%" ^
-    --add-modules javafx.controls,javafx.fxml,javafx.web,javafx.swing,javafx.media ^
+    --add-modules javafx.controls,javafx.fxml,javafx.web,javafx.media ^
     -Dprism.order=sw ^
     -Dprism.verbose=true ^
     -Djava.library.path="%JAVAFX_PATH%" ^
@@ -157,15 +158,83 @@ if errorlevel 1 (
 
 $launcherContent | Out-File -FilePath "$OutputDir\doTERRA.bat" -Encoding ASCII
 
-# Create VBS launcher for no-console window
-Write-Host "Creating silent launcher..." -ForegroundColor Yellow
+# Create main VBS launcher (uses temporary batch file approach)
+Write-Host "Creating VBS launchers..." -ForegroundColor Yellow
 $vbsContent = @'
-Set objShell = CreateObject("Wscript.Shell")
-objShell.CurrentDirectory = Left(WScript.ScriptFullName, InStrRev(WScript.ScriptFullName, "\") - 1)
-objShell.Run "doTERRA.bat", 0, False
+Set objShell = CreateObject("WScript.Shell")
+Set objFSO = CreateObject("Scripting.FileSystemObject")
+
+' Get the directory where this script is located
+strScriptDir = objFSO.GetParentFolderName(WScript.ScriptFullName)
+
+' Change to script directory
+objShell.CurrentDirectory = strScriptDir
+
+' Create a temporary batch file to handle the complex command
+strTempBat = strScriptDir & "\temp_launch.bat"
+Set objFile = objFSO.CreateTextFile(strTempBat, True)
+objFile.WriteLine "@echo off"
+objFile.WriteLine "cd /d """ & strScriptDir & """"
+objFile.WriteLine """" & strScriptDir & "\jre\bin\javaw.exe"" --module-path """ & strScriptDir & "\javafx"" --add-modules javafx.controls,javafx.fxml,javafx.web,javafx.media -Dprism.order=sw -Djava.library.path=""" & strScriptDir & "\javafx"" -jar """ & strScriptDir & "\app\doTERRAApp20-2.0.0.jar"""
+objFile.Close
+
+' Run the batch file hidden
+objShell.Run """" & strTempBat & """", 0, False
+
+' Wait a moment then delete the temp file
+WScript.Sleep 1000
+objFSO.DeleteFile strTempBat
 '@
 
 $vbsContent | Out-File -FilePath "$OutputDir\doTERRA.vbs" -Encoding ASCII
+
+# Create direct VBS launcher (runs javaw directly)
+$vbsDirectContent = @'
+Set objShell = CreateObject("WScript.Shell")
+Set objFSO = CreateObject("Scripting.FileSystemObject")
+
+' Get the directory where this script is located
+strScriptPath = WScript.ScriptFullName
+strScriptDir = objFSO.GetParentFolderName(strScriptPath)
+
+' Change to script directory
+objShell.CurrentDirectory = strScriptDir
+
+' Build the Java command
+strJavaExe = strScriptDir & "\jre\bin\javaw.exe"
+strJavaFX = strScriptDir & "\javafx"
+strAppJar = strScriptDir & "\app\doTERRAApp20-2.0.0.jar"
+
+' Build full command line (removed javafx.swing)
+strCommand = """" & strJavaExe & """" & _
+    " --module-path """ & strJavaFX & """" & _
+    " --add-modules javafx.controls,javafx.fxml,javafx.web,javafx.media" & _
+    " -Dprism.order=sw" & _
+    " -Djava.library.path=""" & strJavaFX & """" & _
+    " -jar """ & strAppJar & """"
+
+' Run the application without showing console window
+objShell.Run strCommand, 0, False
+'@
+
+$vbsDirectContent | Out-File -FilePath "$OutputDir\doTERRA-direct.vbs" -Encoding ASCII
+
+# Create debug VBS launcher
+$vbsDebugContent = @'
+Set objShell = CreateObject("WScript.Shell")
+Set objFSO = CreateObject("Scripting.FileSystemObject")
+
+' Get the directory where this script is located
+strScriptDir = objFSO.GetParentFolderName(WScript.ScriptFullName)
+
+' Change to script directory
+objShell.CurrentDirectory = strScriptDir
+
+' Run the batch file with visible console
+objShell.Run "cmd /k doTERRA.bat", 1, True
+'@
+
+$vbsDebugContent | Out-File -FilePath "$OutputDir\doTERRA-debug.vbs" -Encoding ASCII
 
 # Create README
 Write-Host "Creating documentation..." -ForegroundColor Yellow

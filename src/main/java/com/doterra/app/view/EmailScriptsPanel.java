@@ -219,6 +219,9 @@ public class EmailScriptsPanel {
         // Setup drag and drop for the grid
         setupGridDragAndDrop(buttonGrid);
         
+        // Setup right-click context menu for creating scripts
+        setupGridContextMenu(buttonGrid, buttonTab);
+        
         // Add context menu to tab
         setupTabContextMenu(tab, buttonTab);
         
@@ -287,6 +290,30 @@ public class EmailScriptsPanel {
         setupButtonContextMenu(button, scriptButton, tab);
         
         buttonGrid.add(button, targetCol, targetRow);
+        
+        // Update the button order to reflect the new addition
+        updateButtonOrder(buttonGrid);
+    }
+    
+    private void addButtonToTabAtPosition(Tab tab, ScriptButton scriptButton, int targetRow, int targetCol) {
+        ScrollPane scrollPane = (ScrollPane) tab.getContent();
+        GridPane buttonGrid = (GridPane) scrollPane.getContent();
+        
+        // Verify the position is still empty
+        if (!isGridCellEmpty(buttonGrid, targetCol, targetRow)) {
+            // Fall back to addButtonToTab if position is now occupied
+            addButtonToTab(tab, scriptButton);
+            return;
+        }
+        
+        Button button = createButtonUI(scriptButton);
+        setupButtonDragAndDrop(button, scriptButton);
+        setupButtonContextMenu(button, scriptButton, tab);
+        
+        // Set the specific grid position
+        GridPane.setRowIndex(button, targetRow);
+        GridPane.setColumnIndex(button, targetCol);
+        buttonGrid.getChildren().add(button);
         
         // Update the button order to reflect the new addition
         updateButtonOrder(buttonGrid);
@@ -647,6 +674,37 @@ public class EmailScriptsPanel {
         buttonController.saveState();
     }
     
+    private void setupGridContextMenu(GridPane buttonGrid, ButtonTab buttonTab) {
+        // Right-click context menu for creating scripts at specific positions
+        buttonGrid.setOnMouseClicked(e -> {
+            if (e.getButton() == MouseButton.SECONDARY) {
+                // Calculate which grid cell was right-clicked
+                double cellWidth = (buttonGrid.getWidth() - buttonGrid.getPadding().getLeft() - buttonGrid.getPadding().getRight() - (5 * buttonGrid.getHgap())) / 6;
+                double cellHeight = (buttonGrid.getHeight() - buttonGrid.getPadding().getTop() - buttonGrid.getPadding().getBottom() - (5 * buttonGrid.getVgap())) / 6;
+                
+                double adjustedX = e.getX() - buttonGrid.getPadding().getLeft();
+                double adjustedY = e.getY() - buttonGrid.getPadding().getTop();
+                
+                int targetCol = Math.max(0, Math.min(5, (int) (adjustedX / (cellWidth + buttonGrid.getHgap()))));
+                int targetRow = Math.max(0, Math.min(5, (int) (adjustedY / (cellHeight + buttonGrid.getVgap()))));
+                
+                // Only show context menu if the cell is empty
+                if (isGridCellEmpty(buttonGrid, targetCol, targetRow)) {
+                    ContextMenu contextMenu = new ContextMenu();
+                    
+                    MenuItem createScriptItem = new MenuItem("Create Email Script Here");
+                    createScriptItem.setOnAction(event -> {
+                        showCreateButtonDialogAtPosition(buttonTab, targetRow, targetCol);
+                    });
+                    
+                    contextMenu.getItems().add(createScriptItem);
+                    contextMenu.show(buttonGrid, e.getScreenX(), e.getScreenY());
+                }
+                e.consume();
+            }
+        });
+    }
+    
     private void setupButtonContextMenu(Button button, ScriptButton scriptButton, Tab tab) {
         ContextMenu contextMenu = new ContextMenu();
         
@@ -714,6 +772,40 @@ public class EmailScriptsPanel {
                     ScriptButton newButton = new ScriptButton(name, htmlEditor.getHtmlText(), Color.GRAY);
                     buttonController.addButtonToTab(selectedTab.getId(), newButton);
                     addButtonToTab(selectedTab, newButton);
+                    buttonController.saveState();
+                }
+            }
+        });
+    }
+    
+    private void showCreateButtonDialogAtPosition(ButtonTab buttonTab, int targetRow, int targetCol) {
+        TextInputDialog dialog = new TextInputDialog();
+        dialog.setTitle("New Email Script Button");
+        dialog.setHeaderText("Create a new email script button at position (" + (targetRow + 1) + ", " + (targetCol + 1) + ")");
+        dialog.setContentText("Button name:");
+        dialog.initStyle(StageStyle.UTILITY);
+        
+        // Configure dialog to be independent and always on top
+        DialogUtil.configureDialog(dialog);
+        
+        Optional<String> result = dialog.showAndWait();
+        result.ifPresent(name -> {
+            if (!name.trim().isEmpty()) {
+                // Find the tab in the UI
+                Tab targetTab = null;
+                for (Tab tab : tabPane.getTabs()) {
+                    if (buttonTab.getId().equals(tab.getId())) {
+                        targetTab = tab;
+                        break;
+                    }
+                }
+                
+                if (targetTab != null) {
+                    ScriptButton newButton = new ScriptButton(name, htmlEditor.getHtmlText(), Color.GRAY);
+                    buttonController.addButtonToTab(buttonTab.getId(), newButton);
+                    
+                    // Add button at specific position instead of first empty
+                    addButtonToTabAtPosition(targetTab, newButton, targetRow, targetCol);
                     buttonController.saveState();
                 }
             }

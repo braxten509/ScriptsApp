@@ -140,9 +140,9 @@ public class VariableReplacer {
         
         // Create the content
         GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(15);
-        grid.setPadding(new Insets(20, 20, 10, 10));
+        grid.setHgap(8);
+        grid.setVgap(8);
+        grid.setPadding(new Insets(15, 15, 10, 10));
         
         List<TextField> textFields = new ArrayList<>();
         
@@ -151,15 +151,15 @@ public class VariableReplacer {
             
             // Create context label with "Replace <variable> in:" format
             Label contextLabel = new Label("Replace " + variable + " in:");
-            contextLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 12px;");
+            contextLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
             
             // Create context display with rich text formatting
             TextFlow contextDisplay = createFormattedContext(content, variable);
-            contextDisplay.setMaxWidth(450);
+            contextDisplay.setMaxWidth(300);
             
             TextField textField = new TextField();
             textField.setPromptText("Enter " + variable);
-            textField.setPrefColumnCount(25);
+            textField.setPrefColumnCount(20);
             
             // Add components to grid with better spacing
             grid.add(contextLabel, 0, i * 3, 2, 1);
@@ -222,7 +222,7 @@ public class VariableReplacer {
      */
     private static TextFlow createFormattedContext(String content, String variableName) {
         TextFlow textFlow = new TextFlow();
-        textFlow.setStyle("-fx-padding: 5; -fx-background-color: #f9f9f9; -fx-border-color: #e0e0e0; -fx-border-radius: 3;");
+        textFlow.setStyle("-fx-padding: 3; -fx-background-color: #f9f9f9; -fx-border-color: #e0e0e0; -fx-border-radius: 3;");
         
         if (content == null || variableName == null) {
             Text fallback = new Text("(" + variableName + ")");
@@ -262,18 +262,18 @@ public class VariableReplacer {
         // Create text elements
         if (!beforeContext.isEmpty()) {
             Text beforeText = new Text(beforeContext + " ");
-            beforeText.setStyle("-fx-font-size: 11px; -fx-fill: #666666;");
+            beforeText.setStyle("-fx-font-size: 10px; -fx-fill: #666666;");
             textFlow.getChildren().add(beforeText);
         }
         
         // Bold variable name
         Text variableText = new Text("(" + variableName + ")");
-        variableText.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; -fx-fill: #333333;");
+        variableText.setStyle("-fx-font-weight: bold; -fx-font-size: 10px; -fx-fill: #333333;");
         textFlow.getChildren().add(variableText);
         
         if (!afterContext.isEmpty()) {
             Text afterText = new Text(" " + afterContext);
-            afterText.setStyle("-fx-font-size: 11px; -fx-fill: #666666;");
+            afterText.setStyle("-fx-font-size: 10px; -fx-fill: #666666;");
             textFlow.getChildren().add(afterText);
         }
         
