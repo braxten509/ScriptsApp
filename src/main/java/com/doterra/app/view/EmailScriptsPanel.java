@@ -34,6 +34,7 @@ public class EmailScriptsPanel {
     private String originalContent; // Track original content for change detection
     private boolean contentChanged; // Flag to track if content has been modified
     private boolean isVariableReplacement; // Flag to track if current content change is from variable replacement
+    private ContextMenu currentContextMenu; // Track current context menu to close it when needed
     
     public EmailScriptsPanel() {
         root = new BorderPane();
@@ -96,6 +97,17 @@ public class EmailScriptsPanel {
         
         // Click handler to deselect buttons when clicking outside
         root.addEventFilter(MouseEvent.MOUSE_CLICKED, e -> {
+            // Only process left clicks to avoid interfering with context menus
+            if (e.getButton() != MouseButton.PRIMARY) {
+                return;
+            }
+            
+            // Close any open context menu
+            if (currentContextMenu != null && currentContextMenu.isShowing()) {
+                currentContextMenu.hide();
+                currentContextMenu = null;
+            }
+            
             // Check if the target or any of its parents is a button or HTML editor
             Node target = e.getPickResult().getIntersectedNode();
             boolean isButton = false;
@@ -422,14 +434,7 @@ public class EmailScriptsPanel {
             e.consume();
         });
         
-        // Also add drag-over support to the grid itself for empty cells
-        GridPane parentGrid = null;
-        button.parentProperty().addListener((obs, oldParent, newParent) -> {
-            if (newParent instanceof GridPane) {
-                GridPane grid = (GridPane) newParent;
-                setupGridDragAndDrop(grid);
-            }
-        });
+        // No need to set up grid drag and drop here - it's already done when the grid is created
         
         button.setOnDragExited(e -> {
             ComplexStyler.removeDragTargetVisual(button);
@@ -515,6 +520,12 @@ public class EmailScriptsPanel {
     }
     
     private void setupGridDragAndDrop(GridPane grid) {
+        // Check if handlers are already set up to avoid duplicate event handlers
+        if (grid.getProperties().get("dragAndDropSetup") != null) {
+            return;
+        }
+        grid.getProperties().put("dragAndDropSetup", true);
+        
         // Add drag-over and drop support to the grid itself for empty cells
         grid.setOnDragOver(e -> {
             if (e.getDragboard().hasString()) {
@@ -675,33 +686,39 @@ public class EmailScriptsPanel {
     }
     
     private void setupGridContextMenu(GridPane buttonGrid, ButtonTab buttonTab) {
-        // Right-click context menu for creating scripts at specific positions
-        buttonGrid.setOnMouseClicked(e -> {
-            if (e.getButton() == MouseButton.SECONDARY) {
-                // Calculate which grid cell was right-clicked
-                double cellWidth = (buttonGrid.getWidth() - buttonGrid.getPadding().getLeft() - buttonGrid.getPadding().getRight() - (5 * buttonGrid.getHgap())) / 6;
-                double cellHeight = (buttonGrid.getHeight() - buttonGrid.getPadding().getTop() - buttonGrid.getPadding().getBottom() - (5 * buttonGrid.getVgap())) / 6;
-                
-                double adjustedX = e.getX() - buttonGrid.getPadding().getLeft();
-                double adjustedY = e.getY() - buttonGrid.getPadding().getTop();
-                
-                int targetCol = Math.max(0, Math.min(5, (int) (adjustedX / (cellWidth + buttonGrid.getHgap()))));
-                int targetRow = Math.max(0, Math.min(5, (int) (adjustedY / (cellHeight + buttonGrid.getVgap()))));
-                
-                // Only show context menu if the cell is empty
-                if (isGridCellEmpty(buttonGrid, targetCol, targetRow)) {
-                    ContextMenu contextMenu = new ContextMenu();
-                    
-                    MenuItem createScriptItem = new MenuItem("Create Email Script Here");
-                    createScriptItem.setOnAction(event -> {
-                        showCreateButtonDialogAtPosition(buttonTab, targetRow, targetCol);
-                    });
-                    
-                    contextMenu.getItems().add(createScriptItem);
-                    contextMenu.show(buttonGrid, e.getScreenX(), e.getScreenY());
-                }
-                e.consume();
+        // Create a single context menu for the grid
+        ContextMenu gridContextMenu = new ContextMenu();
+        MenuItem createScriptItem = new MenuItem("Create Email Script Here");
+        gridContextMenu.getItems().add(createScriptItem);
+        
+        // Set up context menu request handler
+        buttonGrid.setOnContextMenuRequested(e -> {
+            // Close any previously open context menu
+            if (currentContextMenu != null && currentContextMenu.isShowing()) {
+                currentContextMenu.hide();
             }
+            
+            // Calculate which grid cell was right-clicked
+            double cellWidth = (buttonGrid.getWidth() - buttonGrid.getPadding().getLeft() - buttonGrid.getPadding().getRight() - (5 * buttonGrid.getHgap())) / 6;
+            double cellHeight = (buttonGrid.getHeight() - buttonGrid.getPadding().getTop() - buttonGrid.getPadding().getBottom() - (5 * buttonGrid.getVgap())) / 6;
+            
+            double adjustedX = e.getX() - buttonGrid.getPadding().getLeft();
+            double adjustedY = e.getY() - buttonGrid.getPadding().getTop();
+            
+            int targetCol = Math.max(0, Math.min(5, (int) (adjustedX / (cellWidth + buttonGrid.getHgap()))));
+            int targetRow = Math.max(0, Math.min(5, (int) (adjustedY / (cellHeight + buttonGrid.getVgap()))));
+            
+            // Only show context menu if the cell is empty
+            if (isGridCellEmpty(buttonGrid, targetCol, targetRow)) {
+                // Update the action to use the calculated position
+                createScriptItem.setOnAction(event -> {
+                    showCreateButtonDialogAtPosition(buttonTab, targetRow, targetCol);
+                });
+                
+                currentContextMenu = gridContextMenu;
+                gridContextMenu.show(buttonGrid, e.getScreenX(), e.getScreenY());
+            }
+            e.consume();
         });
     }
     
@@ -904,7 +921,6 @@ public class EmailScriptsPanel {
         
         Optional<Color> result = dialog.showAndWait();
         result.ifPresent(color -> {
-            scriptButton.setColor(color);
             scriptButton.setColor(color);
             ComplexStyler.applyButtonColor(button, scriptButton);
             buttonController.saveState();

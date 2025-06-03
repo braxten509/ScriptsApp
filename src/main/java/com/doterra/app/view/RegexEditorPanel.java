@@ -708,30 +708,28 @@ public class RegexEditorPanel extends BorderPane {
     
     private String removeCommandOnlyLines(String text) {
         String[] lines = text.split("\n", -1);
-        StringBuilder result = new StringBuilder();
-        boolean hasContent = false;
+        List<String> resultLines = new ArrayList<>();
         
-        for (int i = 0; i < lines.length; i++) {
-            String line = lines[i];
+        for (String line : lines) {
             String trimmedLine = line.trim();
             
-            // Check if line contains only commands or is empty/whitespace
+            // Check if line contains only commands
             boolean isCommandOnlyLine = trimmedLine.matches("\\{for\\s+\\w+\\}") || 
-                                       trimmedLine.equals("{/for}") ||
-                                       trimmedLine.isEmpty();
+                                       trimmedLine.equals("{/for}");
             
             // If it's not a command-only line, add it to result
             if (!isCommandOnlyLine) {
-                if (hasContent) {
-                    result.append("\n");
+                // For empty lines, preserve them as empty lines
+                if (trimmedLine.isEmpty()) {
+                    resultLines.add("");
+                } else {
+                    // Trim leading whitespace from content lines to remove indentation
+                    resultLines.add(trimmedLine);
                 }
-                // Trim leading whitespace from content lines to remove indentation
-                result.append(trimmedLine);
-                hasContent = true;
             }
         }
         
-        return result.toString();
+        return String.join("\n", resultLines);
     }
     
     private String processTemplateVariables(String template, Map<String, List<MatchResult>> matches, 
