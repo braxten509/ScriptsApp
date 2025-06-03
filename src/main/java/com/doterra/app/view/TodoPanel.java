@@ -43,15 +43,23 @@ public class TodoPanel extends BorderPane {
     // File path for saving todo data
     private static final String TODO_DATA_FILE = "data/doterra_todos.dat";
     
+    // Store loaded column widths to apply after table creation
+    private Map<String, Double> loadedActiveColumnWidths = new HashMap<>();
+    private Map<String, Double> loadedCompletedColumnWidths = new HashMap<>();
+    
     // Serializable data classes for persistence
     private static class TodoData implements Serializable {
-        private static final long serialVersionUID = 2L;
+        private static final long serialVersionUID = 3L; // Increment for backward compatibility
         public List<SerializableTodoTask> activeTasks;
         public List<SerializableCompletedTask> completedTasks;
+        public Map<String, Double> activeTableColumnWidths;
+        public Map<String, Double> completedTableColumnWidths;
         
         public TodoData() {
             activeTasks = new ArrayList<>();
             completedTasks = new ArrayList<>();
+            activeTableColumnWidths = new HashMap<>();
+            completedTableColumnWidths = new HashMap<>();
         }
     }
     
@@ -104,6 +112,7 @@ public class TodoPanel extends BorderPane {
         private final ObjectProperty<LocalDateTime> waitUntil = new SimpleObjectProperty<>();
         private final ObjectProperty<LocalDateTime> lastContacted = new SimpleObjectProperty<>();
         private final ObjectProperty<LocalDateTime> dateCreated = new SimpleObjectProperty<>(LocalDateTime.now());
+        private final BooleanProperty detailsExpanded = new SimpleBooleanProperty(false);
         
         public TodoTask() {}
         
@@ -122,6 +131,7 @@ public class TodoPanel extends BorderPane {
         public ObjectProperty<LocalDateTime> waitUntilProperty() { return waitUntil; }
         public ObjectProperty<LocalDateTime> lastContactedProperty() { return lastContacted; }
         public ObjectProperty<LocalDateTime> dateCreatedProperty() { return dateCreated; }
+        public BooleanProperty detailsExpandedProperty() { return detailsExpanded; }
         
         // Getters and setters
         public boolean isCompleted() { return completed.get(); }
@@ -147,6 +157,9 @@ public class TodoPanel extends BorderPane {
         
         public LocalDateTime getDateCreated() { return dateCreated.get(); }
         public void setDateCreated(LocalDateTime dateCreated) { this.dateCreated.set(dateCreated); }
+        
+        public boolean isDetailsExpanded() { return detailsExpanded.get(); }
+        public void setDetailsExpanded(boolean expanded) { this.detailsExpanded.set(expanded); }
     }
     
     public static class CompletedTask {
@@ -296,6 +309,24 @@ public class TodoPanel extends BorderPane {
                 data.completedTasks.add(new SerializableCompletedTask(task));
             }
             
+            // Save column widths from active tasks table
+            if (activeTasksTable != null) {
+                for (TableColumn<TodoTask, ?> column : activeTasksTable.getColumns()) {
+                    if (column.getText() != null && !column.getText().isEmpty()) {
+                        data.activeTableColumnWidths.put(column.getText(), column.getWidth());
+                    }
+                }
+            }
+            
+            // Save column widths from completed tasks table
+            if (completedTasksTable != null) {
+                for (TableColumn<CompletedTask, ?> column : completedTasksTable.getColumns()) {
+                    if (column.getText() != null && !column.getText().isEmpty()) {
+                        data.completedTableColumnWidths.put(column.getText(), column.getWidth());
+                    }
+                }
+            }
+            
             // Save to file
             // Ensure parent directory exists
             File file = new File(TODO_DATA_FILE);
@@ -357,6 +388,14 @@ public class TodoPanel extends BorderPane {
             for (SerializableCompletedTask serializable : data.completedTasks) {
                 CompletedTask task = new CompletedTask(serializable.name, serializable.id, serializable.description, serializable.completedDate);
                 completedTasks.add(task);
+            }
+            
+            // Load column widths (handle backward compatibility)
+            if (data.activeTableColumnWidths != null) {
+                loadedActiveColumnWidths.putAll(data.activeTableColumnWidths);
+            }
+            if (data.completedTableColumnWidths != null) {
+                loadedCompletedColumnWidths.putAll(data.completedTableColumnWidths);
             }
             
         } catch (Exception e) {
@@ -427,13 +466,10 @@ public class TodoPanel extends BorderPane {
         setupActiveTasksTable();
         setupRowDragAndDrop();
         
-        // Wrap table in ScrollPane
-        ScrollPane tableScroll = new ScrollPane(activeTasksTable);
-        tableScroll.setFitToWidth(true);
-        tableScroll.setFitToHeight(true);
-        VBox.setVgrow(tableScroll, Priority.ALWAYS);
+        // Add table directly without ScrollPane wrapper
+        VBox.setVgrow(activeTasksTable, Priority.ALWAYS);
         
-        section.getChildren().addAll(titleLabel, controls, tableScroll);
+        section.getChildren().addAll(titleLabel, controls, activeTasksTable);
         VBox.setVgrow(section, Priority.ALWAYS);
         return section;
     }
@@ -472,18 +508,18 @@ public class TodoPanel extends BorderPane {
         // Status column with custom cell factory
         TableColumn<TodoTask, TaskStatus> statusCol = new TableColumn<>("Status");
         statusCol.setPrefWidth(150); // Reduced to fit screen
-        statusCol.setMinWidth(150);
-        statusCol.setMaxWidth(150);
-        statusCol.setResizable(false);
+        statusCol.setMinWidth(100);
+        statusCol.setResizable(true);
+        statusCol.setStyle("-fx-border-color: transparent #cccccc transparent transparent; -fx-border-width: 0 1 0 0;");
         statusCol.setCellValueFactory(cellData -> cellData.getValue().statusProperty());
         statusCol.setCellFactory(column -> new StatusCell());
         
         // Name column
         TableColumn<TodoTask, String> nameCol = new TableColumn<>("Name");
         nameCol.setPrefWidth(140);
-        nameCol.setMinWidth(140);
-        nameCol.setMaxWidth(140);
-        nameCol.setResizable(false);
+        nameCol.setMinWidth(80);
+        nameCol.setResizable(true);
+        nameCol.setStyle("-fx-border-color: transparent #cccccc transparent transparent; -fx-border-width: 0 1 0 0;");
         nameCol.setCellValueFactory(cellData -> cellData.getValue().nameProperty());
         nameCol.setCellFactory(column -> new EditableTextCell());
         nameCol.setOnEditCommit(event -> {
@@ -493,9 +529,9 @@ public class TodoPanel extends BorderPane {
         // ID column
         TableColumn<TodoTask, String> idCol = new TableColumn<>("ID");
         idCol.setPrefWidth(60);
-        idCol.setMinWidth(60);
-        idCol.setMaxWidth(60);
-        idCol.setResizable(false);
+        idCol.setMinWidth(40);
+        idCol.setResizable(true);
+        idCol.setStyle("-fx-border-color: transparent #cccccc transparent transparent; -fx-border-width: 0 1 0 0;");
         idCol.setCellValueFactory(cellData -> cellData.getValue().idProperty());
         idCol.setCellFactory(column -> new EditableTextCell());
         idCol.setOnEditCommit(event -> {
@@ -505,9 +541,9 @@ public class TodoPanel extends BorderPane {
         // Last Contacted column
         TableColumn<TodoTask, LocalDateTime> lastContactedCol = new TableColumn<>("Last Contacted");
         lastContactedCol.setPrefWidth(180);
-        lastContactedCol.setMinWidth(180);
-        lastContactedCol.setMaxWidth(180);
-        lastContactedCol.setResizable(false);
+        lastContactedCol.setMinWidth(120);
+        lastContactedCol.setResizable(true);
+        lastContactedCol.setStyle("-fx-border-color: transparent #cccccc transparent transparent; -fx-border-width: 0 1 0 0;");
         lastContactedCol.setCellValueFactory(cellData -> cellData.getValue().lastContactedProperty());
         lastContactedCol.setCellFactory(column -> new TableCell<TodoTask, LocalDateTime>() {
             private final Button button = new Button("Update");
@@ -555,9 +591,9 @@ public class TodoPanel extends BorderPane {
         // Date Created column
         TableColumn<TodoTask, LocalDateTime> dateCreatedCol = new TableColumn<>("Date Created");
         dateCreatedCol.setPrefWidth(130);
-        dateCreatedCol.setMinWidth(130);
-        dateCreatedCol.setMaxWidth(130);
-        dateCreatedCol.setResizable(false);
+        dateCreatedCol.setMinWidth(100);
+        dateCreatedCol.setResizable(true);
+        dateCreatedCol.setStyle("-fx-border-color: transparent #cccccc transparent transparent; -fx-border-width: 0 1 0 0;");
         dateCreatedCol.setCellValueFactory(cellData -> cellData.getValue().dateCreatedProperty());
         dateCreatedCol.setCellFactory(column -> new TableCell<TodoTask, LocalDateTime>() {
             @Override
@@ -575,27 +611,56 @@ public class TodoPanel extends BorderPane {
         // Details column (renamed from Description)
         TableColumn<TodoTask, String> detailsCol = new TableColumn<>("Details");
         detailsCol.setPrefWidth(220);
-        detailsCol.setMinWidth(220);
-        detailsCol.setMaxWidth(220);
-        detailsCol.setResizable(false);
+        detailsCol.setMinWidth(150);
+        detailsCol.setResizable(true);
         detailsCol.setCellValueFactory(cellData -> cellData.getValue().descriptionProperty());
-        detailsCol.setCellFactory(column -> new EditableTextCell());
+        detailsCol.setCellFactory(column -> new ExpandableDetailsCell());
         detailsCol.setOnEditCommit(event -> {
             event.getRowValue().setDescription(event.getNewValue());
         });
         
+        
         activeTasksTable.getColumns().addAll(checkCol, statusCol, nameCol, idCol, lastContactedCol, dateCreatedCol, detailsCol);
         
-        // Use a custom resize policy that prevents extra columns while allowing table to fill space
-        activeTasksTable.setColumnResizePolicy(new Callback<TableView.ResizeFeatures, Boolean>() {
-            @Override
-            public Boolean call(TableView.ResizeFeatures param) {
-                return true; // Always return true to prevent default resizing
-            }
-        });
+        // Use CONSTRAINED_RESIZE_POLICY to make the table stretch to fill available width
+        activeTasksTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         
         // Enable row selection
         activeTasksTable.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
+        
+        // Apply saved column widths
+        applyColumnWidths(activeTasksTable, loadedActiveColumnWidths);
+        
+        // Add listeners to save column widths when they change
+        for (TableColumn<TodoTask, ?> column : activeTasksTable.getColumns()) {
+            column.widthProperty().addListener((obs, oldWidth, newWidth) -> saveTodoData());
+        }
+        
+        // Add global click listener to collapse expanded details when clicking outside
+        activeTasksTable.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, event -> {
+            // Get the source of the click
+            Object source = event.getTarget();
+            
+            // Check if any task has expanded details
+            for (TodoTask task : activeTasks) {
+                if (task.isDetailsExpanded()) {
+                    // Check if the click was on a TextArea (expanded details) - if so, don't collapse
+                    if (source instanceof TextArea) {
+                        System.out.println("DEBUG: Click on TextArea - not collapsing");
+                        return;
+                    }
+                    
+                    // Use Platform.runLater to allow focus listener to trigger first
+                    javafx.application.Platform.runLater(() -> {
+                        // Collapse the expanded details after a brief delay
+                        task.setDetailsExpanded(false);
+                        System.out.println("DEBUG: Collapsed expanded details due to outside click");
+                        activeTasksTable.refresh();
+                    });
+                    break; // Only one can be expanded at a time
+                }
+            }
+        });
     }
     
     private void setupRowDragAndDrop() {
@@ -887,6 +952,190 @@ public class TodoPanel extends BorderPane {
         }
     }
     
+    // Custom expandable cell for Details column
+    private class ExpandableDetailsCell extends TableCell<TodoTask, String> {
+        private TextField textField;
+        private TextArea currentTextArea;
+        
+        public ExpandableDetailsCell() {
+            setAlignment(Pos.CENTER);
+            setStyle("-fx-border-width: 0; -fx-background-color: transparent;");
+            setWrapText(true);
+            
+            // Add double-click handler to expand/collapse with event filtering
+            addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, event -> {
+                if (event.getClickCount() == 2 && !isEmpty()) {
+                    System.out.println("DEBUG: Double-click FILTER PRESSED detected on Details cell, index=" + getIndex());
+                    event.consume();
+                    toggleExpanded();
+                }
+                // Don't consume single clicks - let them through for cell selection
+            });
+            
+            addEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, event -> {
+                if (event.getClickCount() == 2 && !isEmpty()) {
+                    System.out.println("DEBUG: Double-click FILTER CLICKED detected on Details cell, index=" + getIndex());
+                    event.consume();
+                    // Additional handling in case pressed didn't work
+                    javafx.application.Platform.runLater(() -> {
+                        if (isEditing()) {
+                            System.out.println("DEBUG: Cancelling edit mode in clicked handler");
+                            cancelEdit();
+                        }
+                        // Only toggle if not already expanded (avoid double toggling)
+                        if (getIndex() >= 0 && getIndex() < getTableView().getItems().size()) {
+                            TodoTask task = getTableView().getItems().get(getIndex());
+                            if (task != null && !task.isDetailsExpanded()) {
+                                toggleExpanded();
+                            }
+                        }
+                    });
+                }
+                // Don't consume single clicks - let them through for cell selection
+            });
+        }
+        
+        private void toggleExpanded() {
+            if (getIndex() >= 0 && getIndex() < getTableView().getItems().size()) {
+                TodoTask task = getTableView().getItems().get(getIndex());
+                if (task != null) {
+                    boolean newState = !task.isDetailsExpanded();
+                    System.out.println("DEBUG: Toggling expansion from " + task.isDetailsExpanded() + " to " + newState);
+                    task.setDetailsExpanded(newState);
+                    updateDisplay();
+                }
+            }
+        }
+        
+        @Override
+        public void startEdit() {
+            // Disable normal single-click editing entirely
+            // Only allow editing through the expanded TextArea (double-click)
+            System.out.println("DEBUG: startEdit() called but disabled for Details column");
+            return;
+        }
+        
+        @Override
+        public void cancelEdit() {
+            super.cancelEdit();
+            updateDisplay();
+        }
+        
+        @Override
+        public void commitEdit(String newValue) {
+            super.commitEdit(newValue);
+            updateDisplay();
+        }
+        
+        @Override
+        public void updateItem(String item, boolean empty) {
+            super.updateItem(item, empty);
+            
+            if (empty || getIndex() < 0 || getIndex() >= getTableView().getItems().size()) {
+                setText(null);
+                setGraphic(null);
+                setStyle("-fx-border-width: 0; -fx-background-color: transparent;");
+                setPrefHeight(-1);
+            } else {
+                setStyle("-fx-border-width: 0; -fx-background-color: transparent;");
+                
+                if (isEditing()) {
+                    if (textField != null) {
+                        textField.setText(getString());
+                        setGraphic(textField);
+                        setText(null);
+                    }
+                } else {
+                    updateDisplay();
+                }
+            }
+        }
+        
+        private void updateDisplay() {
+            if (getIndex() < 0 || getIndex() >= getTableView().getItems().size()) {
+                return;
+            }
+            
+            TodoTask task = getTableView().getItems().get(getIndex());
+            boolean isExpanded = task != null && task.isDetailsExpanded();
+            
+            if (isExpanded) {
+                // Show full text in a text area when expanded
+                currentTextArea = new TextArea(getString());
+                currentTextArea.setEditable(true);
+                currentTextArea.setWrapText(true);
+                currentTextArea.setPrefRowCount(4);
+                currentTextArea.setPrefHeight(80);
+                currentTextArea.setMaxHeight(80);
+                currentTextArea.setStyle("-fx-border-width: 1; -fx-border-color: #cccccc; -fx-background-color: white; -fx-text-alignment: center;");
+                
+                // Save content when focus is lost (but don't auto-collapse - let global handler do that)
+                currentTextArea.focusedProperty().addListener((obs, wasFocused, isNowFocused) -> {
+                    if (!isNowFocused) {
+                        // Save the content directly to the task
+                        if (task != null) {
+                            String newText = currentTextArea.getText();
+                            System.out.println("DEBUG: Saving text to task: '" + newText + "'");
+                            task.setDescription(newText);
+                            saveTodoData(); // Save to file
+                        }
+                    }
+                });
+                
+                setGraphic(currentTextArea);
+                setText(null);
+                setPrefHeight(85);
+                setStyle("-fx-border-width: 0; -fx-background-color: transparent;");
+                
+                // Focus the text area so user can immediately start typing
+                currentTextArea.requestFocus();
+            } else {
+                // Show truncated text when collapsed
+                currentTextArea = null; // Clear reference
+                setText(getString());
+                setGraphic(null);
+                setPrefHeight(-1);
+                setStyle("-fx-border-width: 0; -fx-background-color: transparent;");
+            }
+        }
+        
+        private void createTextField() {
+            textField = new TextField(getString());
+            textField.setStyle("-fx-border-width: 0; -fx-background-color: transparent; -fx-text-alignment: center;");
+            textField.setAlignment(Pos.CENTER);
+            textField.setMinWidth(this.getWidth() - this.getGraphicTextGap() * 2);
+            
+            // Ensure centering works for new text input
+            textField.textProperty().addListener((obs, oldText, newText) -> {
+                textField.setAlignment(Pos.CENTER);
+            });
+            
+            textField.setOnAction(event -> commitEdit(textField.getText()));
+            textField.focusedProperty().addListener((obs, wasFocused, isNowFocused) -> {
+                if (!isNowFocused) {
+                    commitEdit(textField.getText());
+                }
+            });
+        }
+        
+        private String getString() {
+            return getItem() == null ? "" : getItem();
+        }
+        
+        // Public method to save current TextArea content
+        public void saveCurrentContent() {
+            if (currentTextArea != null && getIndex() >= 0 && getIndex() < getTableView().getItems().size()) {
+                TodoTask task = getTableView().getItems().get(getIndex());
+                if (task != null) {
+                    String newText = currentTextArea.getText();
+                    System.out.println("DEBUG: Force saving content from TextArea: '" + newText + "'");
+                    task.setDescription(newText);
+                    saveTodoData();
+                }
+            }
+        }
+    }
+    
     // Custom text cell that doesn't show borders and centers text
     private static class EditableTextCell extends TableCell<TodoTask, String> {
         private TextField textField;
@@ -942,6 +1191,12 @@ public class TodoPanel extends BorderPane {
             textField.setStyle("-fx-border-width: 0; -fx-background-color: transparent; -fx-text-alignment: center;");
             textField.setAlignment(Pos.CENTER);
             textField.setMinWidth(this.getWidth() - this.getGraphicTextGap() * 2);
+            
+            // Ensure centering works for new text input
+            textField.textProperty().addListener((obs, oldText, newText) -> {
+                textField.setAlignment(Pos.CENTER);
+            });
+            
             textField.setOnAction(event -> commitEdit(textField.getText()));
             textField.focusedProperty().addListener((obs, wasFocused, isNowFocused) -> {
                 if (!isNowFocused) {
@@ -968,6 +1223,8 @@ public class TodoPanel extends BorderPane {
         
         TableColumn<CompletedTask, String> nameCol = new TableColumn<>("Name");
         nameCol.setPrefWidth(200);
+        nameCol.setMinWidth(100);
+        nameCol.setResizable(true);
         nameCol.setCellValueFactory(cellData -> cellData.getValue().nameProperty());
         nameCol.setCellFactory(column -> {
             TableCell<CompletedTask, String> cell = new TableCell<CompletedTask, String>() {
@@ -987,6 +1244,8 @@ public class TodoPanel extends BorderPane {
         
         TableColumn<CompletedTask, String> idCol = new TableColumn<>("ID");
         idCol.setPrefWidth(100);
+        idCol.setMinWidth(50);
+        idCol.setResizable(true);
         idCol.setCellValueFactory(cellData -> cellData.getValue().idProperty());
         idCol.setCellFactory(column -> {
             TableCell<CompletedTask, String> cell = new TableCell<CompletedTask, String>() {
@@ -1006,6 +1265,8 @@ public class TodoPanel extends BorderPane {
         
         TableColumn<CompletedTask, String> descCol = new TableColumn<>("Description");
         descCol.setPrefWidth(250);
+        descCol.setMinWidth(150);
+        descCol.setResizable(true);
         descCol.setCellValueFactory(cellData -> cellData.getValue().descriptionProperty());
         descCol.setCellFactory(column -> {
             TableCell<CompletedTask, String> cell = new TableCell<CompletedTask, String>() {
@@ -1025,6 +1286,8 @@ public class TodoPanel extends BorderPane {
         
         TableColumn<CompletedTask, LocalDateTime> dateCol = new TableColumn<>("Completed Date");
         dateCol.setPrefWidth(200);
+        dateCol.setMinWidth(120);
+        dateCol.setResizable(true);
         dateCol.setCellValueFactory(cellData -> cellData.getValue().completedDateProperty());
         dateCol.setCellFactory(column -> new TableCell<CompletedTask, LocalDateTime>() {
             @Override
@@ -1039,6 +1302,17 @@ public class TodoPanel extends BorderPane {
         });
         
         completedTasksTable.getColumns().addAll(nameCol, idCol, descCol, dateCol);
+        
+        // Use CONSTRAINED_RESIZE_POLICY to make the table stretch to fill available width
+        completedTasksTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        
+        // Apply saved column widths
+        applyColumnWidths(completedTasksTable, loadedCompletedColumnWidths);
+        
+        // Add listeners to save column widths when they change
+        for (TableColumn<CompletedTask, ?> column : completedTasksTable.getColumns()) {
+            column.widthProperty().addListener((obs, oldWidth, newWidth) -> saveTodoData());
+        }
         
         // Add context menu for completed tasks
         setupCompletedTasksContextMenu();
@@ -1163,5 +1437,24 @@ public class TodoPanel extends BorderPane {
         alert.setHeaderText(null);
         alert.setContentText(content);
         alert.showAndWait();
+    }
+    
+    /**
+     * Apply saved column widths to a table
+     */
+    private <T> void applyColumnWidths(TableView<T> table, Map<String, Double> columnWidths) {
+        if (columnWidths == null || columnWidths.isEmpty()) {
+            return;
+        }
+        
+        for (TableColumn<T, ?> column : table.getColumns()) {
+            String columnName = column.getText();
+            if (columnName != null && columnWidths.containsKey(columnName)) {
+                Double width = columnWidths.get(columnName);
+                if (width != null && width > 0) {
+                    column.setPrefWidth(width);
+                }
+            }
+        }
     }
 }
