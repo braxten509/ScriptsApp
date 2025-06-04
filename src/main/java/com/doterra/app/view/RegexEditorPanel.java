@@ -46,6 +46,10 @@ import javafx.stage.StageStyle;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.TableRow;
+import javafx.scene.web.WebView;
+import javafx.scene.web.WebEngine;
+import javafx.concurrent.Worker;
+import netscape.javascript.JSObject;
 
 public class RegexEditorPanel extends BorderPane {
     private static final String TEMPLATES_FILE = "data/regex_templates.dat";
@@ -54,7 +58,8 @@ public class RegexEditorPanel extends BorderPane {
     private TextArea inputTextArea;
     private CodeArea templateArea;
     private ScrollPane outputScrollPane;
-    private TextFlow outputFlow;
+    private WebView outputWebView;
+    private WebEngine webEngine;
     private TableView<PatternEntry> patternsTable;
     private ObservableList<PatternEntry> patterns;
     private ComboBox<RegexTemplate> templateComboBox;
@@ -243,7 +248,7 @@ public class RegexEditorPanel extends BorderPane {
         Button clearBtn = new Button("Clear Output");
         Button popOutBtn = new Button("Pop Out");
         processBtn.setOnAction(e -> processTemplate());
-        clearBtn.setOnAction(e -> outputFlow.getChildren().clear());
+        clearBtn.setOnAction(e -> webEngine.loadContent("<html><body style='font-family: Segoe UI, Arial, sans-serif; font-size: 14px; margin: 10px; background: white;'></body></html>"));
         popOutBtn.setOnAction(e -> {
             processTemplate();
             createPopOutWindow();
@@ -251,12 +256,32 @@ public class RegexEditorPanel extends BorderPane {
         
         outputHeader.getChildren().addAll(outputLabel, spacer, processBtn, clearBtn, popOutBtn);
         
-        // Create TextFlow for clickable output
-        outputFlow = new TextFlow();
-        outputFlow.setPadding(new Insets(5));
-        outputFlow.setMinHeight(190); // Make it fill the scroll pane minus padding
+        // Create WebView for selectable output with clickable links
+        outputWebView = new WebView();
+        webEngine = outputWebView.getEngine();
+        outputWebView.setPrefHeight(200);
+        outputWebView.setMinHeight(200);
         
-        outputScrollPane = new ScrollPane(outputFlow);
+        // Initialize with empty content
+        webEngine.loadContent("<html><body style='font-family: Segoe UI, Arial, sans-serif; font-size: 14px; margin: 10px; background: white;'></body></html>");
+        
+        // Handle link clicks for copying to clipboard
+        webEngine.getLoadWorker().stateProperty().addListener((obs, oldState, newState) -> {
+            if (newState == Worker.State.SUCCEEDED) {
+                JSObject window = (JSObject) webEngine.executeScript("window");
+                window.setMember("javaApp", this);
+                webEngine.executeScript("""
+                    document.addEventListener('click', function(e) {
+                        if (e.target.classList.contains('regex-match')) {
+                            e.preventDefault();
+                            window.javaApp.copyToClipboard(e.target.textContent);
+                        }
+                    });
+                """);
+            }
+        });
+        
+        outputScrollPane = new ScrollPane(outputWebView);
         outputScrollPane.setFitToWidth(true);
         outputScrollPane.setFitToHeight(true);
         outputScrollPane.setPrefViewportHeight(200);
@@ -481,7 +506,7 @@ public class RegexEditorPanel extends BorderPane {
     private void clearAll() {
         patterns.clear();
         templateArea.clear();
-        outputFlow.getChildren().clear();
+        webEngine.loadContent("<html><body style='font-family: Segoe UI, Arial, sans-serif; font-size: 14px; margin: 10px; background: white;'></body></html>");
     }
     
     private void refreshTemplateComboBox() {
@@ -788,14 +813,15 @@ public class RegexEditorPanel extends BorderPane {
     }
     
     private void processTemplateWithLinks(String template, Map<String, List<MatchResult>> matches) {
-        outputFlow.getChildren().clear();
-        
         // First, get all the matches that will be displayed
         Map<String, Set<String>> displayedMatches = new HashMap<>();
         for (Map.Entry<String, List<MatchResult>> entry : matches.entrySet()) {
             Set<String> matchTexts = new HashSet<>();
             for (MatchResult match : entry.getValue()) {
-                matchTexts.add(match.group());
+                String matchText = match.group();
+                if (matchText != null && !matchText.isEmpty()) {
+                    matchTexts.add(matchText);
+                }
             }
             displayedMatches.put(entry.getKey(), matchTexts);
         }
@@ -803,79 +829,67 @@ public class RegexEditorPanel extends BorderPane {
         // Process the template to get the output text
         String output = processTemplateScript(template, matches);
         
-        // Split the output into parts and create hyperlinks for matches
-        String[] lines = output.split("\n");
-        for (int lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-            String line = lines[lineIndex];
-            
-            // Check each pattern's matches in this line
-            List<Node> lineNodes = new ArrayList<>();
-            int lastEnd = 0;
-            
-            // Create a list of all matches in this line with their positions
-            List<MatchInfo> matchInfos = new ArrayList<>();
-            
-            for (Map.Entry<String, Set<String>> entry : displayedMatches.entrySet()) {
-                for (String matchText : entry.getValue()) {
-                    if (matchText.isEmpty()) continue;
-                    
-                    int index = 0;
-                    while ((index = line.indexOf(matchText, index)) != -1) {
-                        matchInfos.add(new MatchInfo(index, index + matchText.length(), matchText, entry.getKey()));
-                        index += matchText.length();
-                    }
-                }
-            }
-            
-            // Sort matches by start position
-            matchInfos.sort((a, b) -> Integer.compare(a.start, b.start));
-            
-            // Remove overlapping matches (keep the first one)
-            List<MatchInfo> nonOverlapping = new ArrayList<>();
-            for (MatchInfo match : matchInfos) {
-                if (nonOverlapping.isEmpty() || match.start >= nonOverlapping.get(nonOverlapping.size() - 1).end) {
-                    nonOverlapping.add(match);
-                }
-            }
-            
-            // Create nodes for this line
-            for (MatchInfo match : nonOverlapping) {
-                // Add text before the match
-                if (match.start > lastEnd) {
-                    lineNodes.add(new Text(line.substring(lastEnd, match.start)));
-                }
+        // Process the entire output as one string to handle multiline matches
+        StringBuilder htmlContent = new StringBuilder();
+        int lastEnd = 0;
+        
+        // Create a list of all matches in the entire output with their positions
+        List<MatchInfo> matchInfos = new ArrayList<>();
+        
+        for (Map.Entry<String, Set<String>> entry : displayedMatches.entrySet()) {
+            for (String matchText : entry.getValue()) {
+                if (matchText.isEmpty()) continue;
                 
-                // Create hyperlink for the match
-                Hyperlink link = new Hyperlink(match.text);
-                link.setStyle("-fx-text-fill: #0066cc; -fx-underline: true;");
-                link.setOnAction(e -> {
-                    // Copy to clipboard
-                    ClipboardContent content = new ClipboardContent();
-                    content.putString(match.text);
-                    Clipboard.getSystemClipboard().setContent(content);
-                });
-                
-                // Add tooltip to show which pattern matched
-                Tooltip tooltip = new Tooltip("Pattern: " + match.patternName + "\nClick to copy");
-                Tooltip.install(link, tooltip);
-                
-                lineNodes.add(link);
-                lastEnd = match.end;
-            }
-            
-            // Add remaining text
-            if (lastEnd < line.length()) {
-                lineNodes.add(new Text(line.substring(lastEnd)));
-            }
-            
-            // Add line nodes to output
-            outputFlow.getChildren().addAll(lineNodes);
-            
-            // Add newline if not the last line
-            if (lineIndex < lines.length - 1) {
-                outputFlow.getChildren().add(new Text("\n"));
+                int index = 0;
+                while ((index = output.indexOf(matchText, index)) != -1) {
+                    matchInfos.add(new MatchInfo(index, index + matchText.length(), matchText, entry.getKey()));
+                    index += matchText.length();
+                }
             }
         }
+        
+        // Sort matches by start position
+        matchInfos.sort((a, b) -> Integer.compare(a.start, b.start));
+        
+        // Remove overlapping matches (keep the first one)
+        List<MatchInfo> nonOverlapping = new ArrayList<>();
+        for (MatchInfo match : matchInfos) {
+            if (nonOverlapping.isEmpty() || match.start >= nonOverlapping.get(nonOverlapping.size() - 1).end) {
+                nonOverlapping.add(match);
+            }
+        }
+        
+        // Generate HTML with clickable links
+        for (MatchInfo match : nonOverlapping) {
+            // Add text before the match
+            if (match.start > lastEnd) {
+                String beforeText = output.substring(lastEnd, match.start);
+                htmlContent.append(escapeHtml(beforeText));
+            }
+            
+            // Create clickable span for the match
+            htmlContent.append("<span class='regex-match' style='color: #0066cc; text-decoration: underline; cursor: pointer;' title='Pattern: ")
+                      .append(escapeHtml(match.patternName))
+                      .append(" - Click to copy'>")
+                      .append(escapeHtml(match.text))
+                      .append("</span>");
+            
+            lastEnd = match.end;
+        }
+        
+        // Add remaining text
+        if (lastEnd < output.length()) {
+            String remainingText = output.substring(lastEnd);
+            htmlContent.append(escapeHtml(remainingText));
+        }
+        
+        // Create complete HTML document
+        String fullHtml = "<html><body style='font-family: Segoe UI, Arial, sans-serif; font-size: 14px; margin: 10px; background: white; white-space: pre-wrap;'>" 
+                         + htmlContent.toString() 
+                         + "</body></html>";
+        
+        // Load the HTML content into the WebView
+        webEngine.loadContent(fullHtml);
     }
     
     // Helper class to track match information
@@ -891,6 +905,28 @@ public class RegexEditorPanel extends BorderPane {
             this.text = text;
             this.patternName = patternName;
         }
+    }
+    
+    /**
+     * Called from JavaScript to copy text to clipboard
+     */
+    public void copyToClipboard(String text) {
+        ClipboardContent content = new ClipboardContent();
+        content.putString(text);
+        Clipboard.getSystemClipboard().setContent(content);
+    }
+    
+    /**
+     * Escapes HTML special characters
+     */
+    private String escapeHtml(String text) {
+        if (text == null) return "";
+        return text.replace("&", "&amp;")
+                  .replace("<", "&lt;")
+                  .replace(">", "&gt;")
+                  .replace("\"", "&quot;")
+                  .replace("'", "&#39;")
+                  .replace("\n", "<br>");
     }
     
     private String processTemplateScript(String template, Map<String, List<MatchResult>> matches) {
@@ -1164,8 +1200,8 @@ public class RegexEditorPanel extends BorderPane {
      * Creates a detached pop-out window with the current output content
      */
     private void createPopOutWindow() {
-        // Don't create pop-out if there's no content
-        if (outputFlow.getChildren().isEmpty()) {
+        // Don't create pop-out if webEngine is not ready
+        if (webEngine.getDocument() == null) {
             return;
         }
         
@@ -1179,39 +1215,40 @@ public class RegexEditorPanel extends BorderPane {
         popOutWindow.setTitle("Regex Output");
         popOutWindow.setAlwaysOnTop(true);
         
-        // Create a new TextFlow with copied content
-        TextFlow popOutContent = new TextFlow();
-        popOutContent.setPadding(new Insets(10, 10, 5, 10));
+        // Create a new WebView with the same content
+        WebView popOutWebView = new WebView();
+        WebEngine popOutEngine = popOutWebView.getEngine();
         
-        // Copy all nodes from the original output
-        for (Node node : outputFlow.getChildren()) {
-            Node copiedNode = copyNode(node);
-            if (copiedNode != null) {
-                popOutContent.getChildren().add(copiedNode);
+        // Copy the current HTML content to the new WebView
+        String currentContent = (String) webEngine.executeScript("document.documentElement.outerHTML");
+        popOutEngine.loadContent(currentContent);
+        
+        // Set up clipboard functionality for the pop-out window
+        popOutEngine.getLoadWorker().stateProperty().addListener((obs, oldState, newState) -> {
+            if (newState == Worker.State.SUCCEEDED) {
+                JSObject window = (JSObject) popOutEngine.executeScript("window");
+                window.setMember("javaApp", this);
+                popOutEngine.executeScript("""
+                    document.addEventListener('click', function(e) {
+                        if (e.target.classList.contains('regex-match')) {
+                            e.preventDefault();
+                            window.javaApp.copyToClipboard(e.target.textContent);
+                        }
+                    });
+                """);
             }
-        }
+        });
         
         // Create scroll pane for the content
-        ScrollPane scrollPane = new ScrollPane(popOutContent);
+        ScrollPane scrollPane = new ScrollPane(popOutWebView);
         scrollPane.setFitToWidth(true);
         scrollPane.setFitToHeight(false);
         scrollPane.setStyle("-fx-background-color: white; -fx-border-color: #cccccc; -fx-border-width: 1px;");
         
-        // Calculate content height with minimum and maximum bounds
-        double minHeight = 100; // Minimum window height
-        double maxHeight = 400; // Maximum window height to prevent oversized windows
-        double padding = 25; // Extra padding for window chrome and borders
+        // Set reasonable window size
+        double windowHeight = 400;
         
-        // Force layout to calculate actual content size
-        popOutContent.autosize();
-        popOutContent.applyCss();
-        popOutContent.layout();
-        
-        // Get the preferred height of the content
-        double contentHeight = popOutContent.prefHeight(-1) + padding;
-        double windowHeight = Math.max(minHeight, Math.min(maxHeight, contentHeight));
-        
-        // Create scene with calculated height
+        // Create scene
         Scene scene = new Scene(scrollPane, 800, windowHeight);
         scene.getStylesheets().add(getClass().getResource("/styles/main.css").toExternalForm());
         popOutWindow.setScene(scene);
@@ -1228,41 +1265,6 @@ public class RegexEditorPanel extends BorderPane {
         popOutWindow.setOnCloseRequest(e -> popOutWindow = null);
     }
     
-    /**
-     * Creates a copy of a node for the pop-out window
-     */
-    private Node copyNode(Node original) {
-        if (original instanceof Text) {
-            Text originalText = (Text) original;
-            Text copy = new Text(originalText.getText());
-            copy.setFont(originalText.getFont());
-            copy.setFill(originalText.getFill());
-            return copy;
-        } else if (original instanceof Hyperlink) {
-            Hyperlink originalLink = (Hyperlink) original;
-            Hyperlink copy = new Hyperlink(originalLink.getText());
-            copy.setStyle(originalLink.getStyle());
-            
-            // Copy the click action
-            copy.setOnAction(e -> {
-                ClipboardContent content = new ClipboardContent();
-                content.putString(originalLink.getText());
-                Clipboard.getSystemClipboard().setContent(content);
-            });
-            
-            // Copy tooltip if it exists
-            if (originalLink.getTooltip() != null) {
-                Tooltip originalTooltip = originalLink.getTooltip();
-                Tooltip copyTooltip = new Tooltip(originalTooltip.getText());
-                Tooltip.install(copy, copyTooltip);
-            }
-            
-            return copy;
-        }
-        
-        // For other node types, create a text representation
-        return new Text(original.toString());
-    }
     
     /**
      * Sets up context menu for the patterns table

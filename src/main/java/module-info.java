@@ -13,6 +13,7 @@ module org.bchenay.doterraapp20 {
     requires java.scripting;
     requires java.desktop;
     requires org.fxmisc.richtext;
+    requires jdk.jsobject;
 
     opens org.bchenay.doterraapp20 to javafx.fxml;
     exports org.bchenay.doterraapp20;

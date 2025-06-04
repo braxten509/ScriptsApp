@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import com.doterra.app.util.AsyncFileOperations;
 
 public class ButtonController {
     
@@ -43,7 +44,7 @@ public class ButtonController {
         tabs = new LinkedHashMap<>(); // Use LinkedHashMap to preserve order
         this.saveFile = saveFileName;
         if (loadState) {
-            loadState();
+            loadStateAsync();
         }
     }
     
@@ -94,22 +95,60 @@ public class ButtonController {
     }
     
     public void saveState() {
-        try {
-            // Ensure parent directory exists
-            File file = new File(saveFile);
-            File parentDir = file.getParentFile();
-            if (parentDir != null && !parentDir.exists()) {
-                parentDir.mkdirs();
+        AsyncFileOperations.debouncedSave("button-controller-" + saveFile, 500, () -> {
+            try {
+                // Ensure parent directory exists
+                File file = new File(saveFile);
+                File parentDir = file.getParentFile();
+                if (parentDir != null && !parentDir.exists()) {
+                    parentDir.mkdirs();
+                }
+                
+                try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(saveFile))) {
+                    // Convert to list for serialization
+                    List<ButtonTab> tabList = new ArrayList<>(tabs.values());
+                    oos.writeObject(tabList);
+                }
+            } catch (IOException e) {
+                System.err.println("Error saving button state: " + e.getMessage());
             }
-            
-            try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(saveFile))) {
-                // Convert to list for serialization
-                List<ButtonTab> tabList = new ArrayList<>(tabs.values());
-                oos.writeObject(tabList);
+        });
+    }
+    
+    /**
+     * Load state asynchronously
+     */
+    public void loadStateAsync() {
+        AsyncFileOperations.loadAsync(
+            () -> {
+                // This runs on background thread
+                File file = new File(saveFile);
+                if (!file.exists()) {
+                    return new ArrayList<ButtonTab>(); // No saved state to load
+                }
+                
+                try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(saveFile))) {
+                    @SuppressWarnings("unchecked")
+                    List<ButtonTab> tabList = (List<ButtonTab>) ois.readObject();
+                    return tabList;
+                } catch (IOException | ClassNotFoundException e) {
+                    System.err.println("Error loading button state: " + e.getMessage());
+                    return new ArrayList<ButtonTab>();
+                }
+            },
+            (tabList) -> {
+                // This runs on JavaFX thread
+                tabs.clear();
+                for (ButtonTab tab : tabList) {
+                    tabs.put(tab.getId(), tab);
+                }
+            },
+            (error) -> {
+                // This runs on JavaFX thread
+                System.err.println("Error loading button state: " + error.getMessage());
+                error.printStackTrace();
             }
-        } catch (IOException e) {
-            System.err.println("Error saving button state: " + e.getMessage());
-        }
+        );
     }
     
     @SuppressWarnings("unchecked")

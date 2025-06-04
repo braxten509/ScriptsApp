@@ -25,14 +25,10 @@ public class MainView {
     private final NavigationController navigationController;
     private final CssInspector cssInspector;
     
-    // Panels
+    // Pre-initialized lightweight panels
     private final ChatScriptsPanel chatScriptsPanel;
     private final EmailScriptsPanel emailScriptsPanel;
-    private final RegexEditorPanel regexEditorPanel;
     private final CalculatorPanel calculatorPanel;
-    private final TodoPanel todoPanel;
-    private final StickyNotePanel stickyNotePanel;
-    private final CalendarPanel calendarPanel;
     
     // Track active button
     private Button activeNavButton;
@@ -43,21 +39,17 @@ public class MainView {
         // Initialize CSS inspector
         cssInspector = new CssInspector();
         
-        // Initialize panels first
+        // Initialize only lightweight panels immediately (no file I/O)
         chatScriptsPanel = new ChatScriptsPanel();
         emailScriptsPanel = new EmailScriptsPanel();
-        regexEditorPanel = new RegexEditorPanel();
         calculatorPanel = new CalculatorPanel();
-        todoPanel = new TodoPanel();
-        stickyNotePanel = new StickyNotePanel();
-        calendarPanel = new CalendarPanel(todoPanel);
         
-        // Now create sidebar after panels are initialized
+        // Set up navigation controller with lazy loading for heavy panels
+        navigationController = new NavigationController(root, chatScriptsPanel, emailScriptsPanel, calculatorPanel);
+        
+        // Create sidebar
         sidebar = createSidebar();
         root.setLeft(sidebar);
-        
-        // Set up navigation controller
-        navigationController = new NavigationController(root, chatScriptsPanel, emailScriptsPanel, regexEditorPanel, calculatorPanel, todoPanel, stickyNotePanel, calendarPanel);
         
         // Set the initial panel (Chat Scripts)
         navigationController.showPanel("chat");
@@ -100,8 +92,8 @@ public class MainView {
             navigationController.showPanel("calculator");
         });
         
-        StackPane todoBtnContainer = createNavButtonWithBadge("Todo", todoPanel.readyTodoCountProperty());
-        Button todoBtn = (Button) todoBtnContainer.getChildren().get(0);
+        // Create todo button with lazy badge initialization
+        Button todoBtn = createNavButton("Todo");
         todoBtn.setOnAction(e -> {
             setActiveButton(todoBtn);
             navigationController.showPanel("todo");
@@ -119,6 +111,12 @@ public class MainView {
             navigationController.showPanel("calendar");
         });
         
+        Button imageNotesBtn = createNavButton("Image Notes");
+        imageNotesBtn.setOnAction(e -> {
+            setActiveButton(imageNotesBtn);
+            navigationController.showPanel("imagenotes");
+        });
+        
         // Set initial active button
         setActiveButton(chatScriptsBtn);
         
@@ -129,7 +127,7 @@ public class MainView {
         // Create feature panel at bottom
         HBox featurePanel = createFeaturePanel();
         
-        sidebar.getChildren().addAll(titleLabel, chatScriptsBtn, emailScriptsBtn, regexEditorBtn, calculatorBtn, todoBtnContainer, stickyNoteBtn, calendarBtn, spacer, featurePanel);
+        sidebar.getChildren().addAll(titleLabel, chatScriptsBtn, emailScriptsBtn, regexEditorBtn, calculatorBtn, todoBtn, stickyNoteBtn, calendarBtn, imageNotesBtn, spacer, featurePanel);
         return sidebar;
     }
     
@@ -302,20 +300,29 @@ public class MainView {
         return root;
     }
     
-    public TodoPanel getTodoPanel() {
-        return todoPanel;
+    public NavigationController getNavigationController() {
+        return navigationController;
     }
     
-    public StickyNotePanel getStickyNotePanel() {
-        return stickyNotePanel;
+    /**
+     * Get the TodoPanel (will be created if not already loaded)
+     */
+    public TodoPanel getTodoPanel() {
+        return navigationController.getTodoPanel();
     }
     
     /**
      * Cleanup method to be called when the application is closing.
      */
     public void cleanup() {
-        if (stickyNotePanel != null) {
-            stickyNotePanel.cleanup();
+        // Shutdown async file operations
+        com.doterra.app.util.AsyncFileOperations.shutdown();
+        
+        // Cleanup panels if they exist
+        NavigationController navController = getNavigationController();
+        if (navController != null) {
+            // These will be null if not loaded yet, which is fine
+            // No need to explicitly cleanup lazy-loaded panels
         }
     }
 }

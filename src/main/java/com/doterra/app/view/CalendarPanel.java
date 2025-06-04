@@ -23,6 +23,7 @@ import java.time.format.TextStyle;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
+import com.doterra.app.util.AsyncFileOperations;
 
 public class CalendarPanel extends BorderPane {
     
@@ -66,8 +67,8 @@ public class CalendarPanel extends BorderPane {
             }
         }
         
-        // Load saved notes
-        loadNotes();
+        // Load saved notes asynchronously
+        loadNotesAsync();
         
         // Set up daily timer to refresh calendar so ready tasks move with the current date
         setupDailyRefreshTimer();
@@ -640,38 +641,58 @@ public class CalendarPanel extends BorderPane {
     }
     
     /**
-     * Load notes from file
+     * Load notes from file asynchronously
      */
-    @SuppressWarnings("unchecked")
-    private void loadNotes() {
-        File file = new File(NOTES_FILE);
-        if (file.exists()) {
-            try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
-                dateNotes = (Map<LocalDate, String>) ois.readObject();
-            } catch (Exception e) {
-                e.printStackTrace();
+    private void loadNotesAsync() {
+        AsyncFileOperations.loadAsync(
+            () -> {
+                // This runs on background thread
+                File file = new File(NOTES_FILE);
+                if (file.exists()) {
+                    try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
+                        @SuppressWarnings("unchecked")
+                        Map<LocalDate, String> loadedNotes = (Map<LocalDate, String>) ois.readObject();
+                        return loadedNotes;
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        return new HashMap<LocalDate, String>();
+                    }
+                }
+                return new HashMap<LocalDate, String>();
+            },
+            (loadedNotes) -> {
+                // This runs on JavaFX thread
+                dateNotes = loadedNotes;
+                refreshCalendar(); // Refresh calendar to show loaded notes
+            },
+            (error) -> {
+                // This runs on JavaFX thread
+                System.err.println("Error loading calendar notes: " + error.getMessage());
+                error.printStackTrace();
                 dateNotes = new HashMap<>();
             }
-        }
+        );
     }
     
     /**
-     * Save notes to file
+     * Save notes to file with debouncing
      */
     private void saveNotes() {
-        try {
-            // Ensure parent directory exists
-            File file = new File(NOTES_FILE);
-            File parentDir = file.getParentFile();
-            if (parentDir != null && !parentDir.exists()) {
-                parentDir.mkdirs();
+        AsyncFileOperations.debouncedSave("calendar-notes", 500, () -> {
+            try {
+                // Ensure parent directory exists
+                File file = new File(NOTES_FILE);
+                File parentDir = file.getParentFile();
+                if (parentDir != null && !parentDir.exists()) {
+                    parentDir.mkdirs();
+                }
+                
+                try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(NOTES_FILE))) {
+                    oos.writeObject(dateNotes);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-            
-            try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(NOTES_FILE))) {
-                oos.writeObject(dateNotes);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        });
     }
 }
