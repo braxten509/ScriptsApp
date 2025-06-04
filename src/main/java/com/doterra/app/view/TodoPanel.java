@@ -1615,4 +1615,11 @@ public class TodoPanel extends BorderPane {
             }
         }
     }
+    
+    /**
+     * Get the observable list of active tasks for external access
+     */
+    public javafx.collections.ObservableList<TodoTask> getActiveTasks() {
+        return activeTasks;
+    }
 }

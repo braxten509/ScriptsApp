@@ -32,6 +32,7 @@ public class MainView {
     private final CalculatorPanel calculatorPanel;
     private final TodoPanel todoPanel;
     private final StickyNotePanel stickyNotePanel;
+    private final CalendarPanel calendarPanel;
     
     // Track active button
     private Button activeNavButton;
@@ -49,13 +50,14 @@ public class MainView {
         calculatorPanel = new CalculatorPanel();
         todoPanel = new TodoPanel();
         stickyNotePanel = new StickyNotePanel();
+        calendarPanel = new CalendarPanel(todoPanel);
         
         // Now create sidebar after panels are initialized
         sidebar = createSidebar();
         root.setLeft(sidebar);
         
         // Set up navigation controller
-        navigationController = new NavigationController(root, chatScriptsPanel, emailScriptsPanel, regexEditorPanel, calculatorPanel, todoPanel, stickyNotePanel);
+        navigationController = new NavigationController(root, chatScriptsPanel, emailScriptsPanel, regexEditorPanel, calculatorPanel, todoPanel, stickyNotePanel, calendarPanel);
         
         // Set the initial panel (Chat Scripts)
         navigationController.showPanel("chat");
@@ -111,6 +113,12 @@ public class MainView {
             navigationController.showPanel("stickynote");
         });
         
+        Button calendarBtn = createNavButton("Calendar");
+        calendarBtn.setOnAction(e -> {
+            setActiveButton(calendarBtn);
+            navigationController.showPanel("calendar");
+        });
+        
         // Set initial active button
         setActiveButton(chatScriptsBtn);
         
@@ -121,7 +129,7 @@ public class MainView {
         // Create feature panel at bottom
         HBox featurePanel = createFeaturePanel();
         
-        sidebar.getChildren().addAll(titleLabel, chatScriptsBtn, emailScriptsBtn, regexEditorBtn, calculatorBtn, todoBtnContainer, stickyNoteBtn, spacer, featurePanel);
+        sidebar.getChildren().addAll(titleLabel, chatScriptsBtn, emailScriptsBtn, regexEditorBtn, calculatorBtn, todoBtnContainer, stickyNoteBtn, calendarBtn, spacer, featurePanel);
         return sidebar;
     }
     
