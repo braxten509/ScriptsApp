@@ -126,3 +126,21 @@
     -fx-background-color: #2196F3;
     -fx-pref-width: 3;
 }
+
+/* Invalid syntax highlighting for template areas */
+.invalid-syntax {
+    -fx-border-color: #F44336;
+    -fx-border-width: 2;
+    -fx-background-color: #FFEBEE;
+    -fx-effect: dropshadow(gaussian, rgba(244,67,54,0.3), 5, 0, 0, 0);
+}
+
+/* Invalid command highlighting for specific text spans */
+.invalid-command {
+    -fx-underline: true;
+    -fx-strikethrough: false;
+    -fx-text-fill: #000000;
+    -rtfx-underline-color: #B71C1C;
+    -rtfx-underline-dash-array: none;
+    -rtfx-underline-width: 1px;
+}

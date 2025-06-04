@@ -29,13 +29,22 @@ import javafx.scene.input.ClipboardContent;
 import javafx.scene.Node;
 import java.util.Set;
 import java.util.HashSet;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
+import javafx.scene.control.IndexRange;
+import javafx.application.Platform;
+import org.fxmisc.richtext.CodeArea;
+import org.fxmisc.richtext.model.StyleSpans;
+import org.fxmisc.richtext.model.StyleSpansBuilder;
+import javafx.geometry.Point2D;
+import javafx.util.Duration;
 
 public class RegexEditorPanel extends BorderPane {
     private static final String TEMPLATES_FILE = "data/regex_templates.dat";
     private static final String PREFERENCES_FILE = "data/regex_preferences.dat";
     
     private TextArea inputTextArea;
-    private TextArea templateArea;
+    private CodeArea templateArea;
     private ScrollPane outputScrollPane;
     private TextFlow outputFlow;
     private TableView<PatternEntry> patternsTable;
@@ -186,9 +195,19 @@ public class RegexEditorPanel extends BorderPane {
         templateHeader.getChildren().addAll(templateTextLabel, helpBtn);
         templateHeader.setAlignment(Pos.CENTER_LEFT);
         
-        templateArea = new TextArea();
-        templateArea.setPromptText("Click '?' button for syntax help");
+        templateArea = new CodeArea();
+        // CodeArea doesn't have setPromptText, we'll add a placeholder text manually
+        templateArea.setParagraphGraphicFactory(null); // Remove line numbers
+        // CodeArea will show existing content properly
         VBox.setVgrow(templateArea, Priority.ALWAYS);
+        
+        // Add real-time validation for template syntax
+        templateArea.textProperty().addListener((obs, oldText, newText) -> {
+            validateTemplateSyntax(newText);
+        });
+        
+        // Style the template area to match other text areas
+        templateArea.setStyle("-fx-border-color: #cccccc; -fx-border-width: 1px; -fx-font-family: 'Segoe UI', Arial, sans-serif; -fx-font-size: 14px;");
         
         templateSection.getChildren().addAll(templateHeader, templateArea);
         
@@ -418,7 +437,10 @@ public class RegexEditorPanel extends BorderPane {
         }
         
         // Load template text
-        templateArea.setText(template.getTemplateText());
+        templateArea.replaceText(template.getTemplateText());
+        
+        // Validate template syntax after loading
+        validateTemplateSyntax(template.getTemplateText());
     }
     
     private void updateCurrentTemplate() {
@@ -700,6 +722,8 @@ public class RegexEditorPanel extends BorderPane {
         dialog.showAndWait().ifPresent(name -> {
             if (!name.trim().isEmpty()) {
                 patterns.add(new PatternEntry(name, ".*"));
+                // Re-validate template syntax when patterns change
+                validateTemplateSyntax(templateArea.getText());
             }
         });
     }
@@ -708,6 +732,8 @@ public class RegexEditorPanel extends BorderPane {
         PatternEntry selected = patternsTable.getSelectionModel().getSelectedItem();
         if (selected != null) {
             patterns.remove(selected);
+            // Re-validate template syntax when patterns change
+            validateTemplateSyntax(templateArea.getText());
         }
     }
     
@@ -1116,4 +1142,186 @@ public class RegexEditorPanel extends BorderPane {
             }
         }
     }
+    
+    /**
+     * Validates template syntax and highlights invalid commands with red underlines.
+     * @param templateText the template text to validate
+     */
+    private void validateTemplateSyntax(String templateText) {
+        Platform.runLater(() -> {
+            if (templateText == null || templateText.isEmpty()) {
+                templateArea.clearStyle(0, templateArea.getLength());
+                return;
+            }
+            
+            // Create style spans for highlighting invalid commands
+            StyleSpansBuilder<Collection<String>> spansBuilder = new StyleSpansBuilder<>();
+            
+            // Find all {command} patterns
+            Pattern commandPattern = Pattern.compile("\\{([^}]+)\\}");
+            Matcher matcher = commandPattern.matcher(templateText);
+            
+            int lastEnd = 0;
+            
+            // Clear any existing tooltips
+            templateArea.setOnMouseMoved(null);
+            
+            while (matcher.find()) {
+                String command = matcher.group(1).trim();
+                int start = matcher.start();
+                int end = matcher.end();
+                
+                // Add normal styling for text before this command
+                if (start > lastEnd) {
+                    spansBuilder.add(Collections.emptyList(), start - lastEnd);
+                }
+                
+                // Add styling for the command itself
+                if (!isValidCommand(command)) {
+                    spansBuilder.add(Collections.singletonList("invalid-command"), end - start);
+                } else {
+                    spansBuilder.add(Collections.emptyList(), end - start);
+                }
+                
+                lastEnd = end;
+            }
+            
+            // Add normal styling for any remaining text
+            if (lastEnd < templateText.length()) {
+                spansBuilder.add(Collections.emptyList(), templateText.length() - lastEnd);
+            }
+            
+            // Apply the styles
+            StyleSpans<Collection<String>> styles = spansBuilder.create();
+            templateArea.setStyleSpans(0, styles);
+        });
+    }
+    
+    /**
+     * Checks if a command is valid according to the template syntax.
+     * @param command the command text (without braces)
+     * @return true if the command is valid
+     */
+    private boolean isValidCommand(String command) {
+        if (command == null || command.trim().isEmpty()) {
+            return false;
+        }
+        
+        command = command.trim();
+        
+        // Check for valid command patterns:
+        // 1. for pattern_name
+        // 2. /for
+        // 3. pattern_name
+        // 4. pattern_name[index]
+        // 5. pattern_name.group(n)
+        // 6. pattern_name[index].group(n)
+        
+        // Check for loop commands
+        if (command.equals("/for")) {
+            return true;
+        }
+        
+        if (command.startsWith("for ")) {
+            String patternName = command.substring(4).trim();
+            return isValidPatternReference(patternName);
+        }
+        
+        // Check for pattern references
+        return isValidPatternReference(command);
+    }
+    
+    /**
+     * Checks if a pattern reference is valid.
+     * @param reference the pattern reference
+     * @return true if the reference is valid
+     */
+    private boolean isValidPatternReference(String reference) {
+        if (reference == null || reference.trim().isEmpty()) {
+            return false;
+        }
+        
+        reference = reference.trim();
+        
+        // Check for valid pattern name (alphanumeric + underscore)
+        String patternName;
+        String remainder = "";
+        
+        // Extract pattern name (before [ or .)
+        int bracketIndex = reference.indexOf('[');
+        int dotIndex = reference.indexOf('.');
+        
+        if (bracketIndex == -1 && dotIndex == -1) {
+            // Simple pattern name
+            patternName = reference;
+        } else {
+            int splitIndex = -1;
+            if (bracketIndex != -1 && dotIndex != -1) {
+                splitIndex = Math.min(bracketIndex, dotIndex);
+            } else if (bracketIndex != -1) {
+                splitIndex = bracketIndex;
+            } else {
+                splitIndex = dotIndex;
+            }
+            
+            patternName = reference.substring(0, splitIndex);
+            remainder = reference.substring(splitIndex);
+        }
+        
+        // Validate pattern name format
+        if (!patternName.matches("^[a-zA-Z][a-zA-Z0-9_]*$")) {
+            return false;
+        }
+        
+        // Check if pattern name exists in the current patterns
+        boolean patternExists = patterns.stream()
+            .anyMatch(pattern -> pattern.getName().equals(patternName));
+        
+        if (!patternExists) {
+            return false;
+        }
+        
+        // Validate remainder syntax
+        if (remainder.isEmpty()) {
+            return true;
+        }
+        
+        // Check for [index] syntax
+        if (remainder.startsWith("[")) {
+            int closeBracket = remainder.indexOf(']');
+            if (closeBracket == -1) {
+                return false;
+            }
+            
+            String indexStr = remainder.substring(1, closeBracket);
+            try {
+                Integer.parseInt(indexStr);
+            } catch (NumberFormatException e) {
+                return false;
+            }
+            
+            remainder = remainder.substring(closeBracket + 1);
+        }
+        
+        // Check for .group(n) syntax
+        if (remainder.startsWith(".group(")) {
+            int closeParen = remainder.indexOf(')');
+            if (closeParen == -1 || closeParen != remainder.length() - 1) {
+                return false;
+            }
+            
+            String groupStr = remainder.substring(7, closeParen);
+            try {
+                Integer.parseInt(groupStr);
+            } catch (NumberFormatException e) {
+                return false;
+            }
+            
+            return true;
+        }
+        
+        return remainder.isEmpty();
+    }
+    
+    
 }
