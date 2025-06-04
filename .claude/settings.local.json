@@ -43,7 +43,11 @@
       "Bash(/home/braxten509/.nvm/versions/node/v22.15.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -A 10 -B 2 \"showCreateButtonDialog|showRenameButtonDialog|showChangeColorDialog\" src/main/java/com/doterra/app/view/ChatScriptsPanel.java)",
       "Bash(/home/braxten509/.nvm/versions/node/v22.15.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -A 20 \"private void showCreateButtonDialog\" src/main/java/com/doterra/app/view/ChatScriptsPanel.java)",
       "Bash(java:*)",
-      "Bash(cp:*)"
+      "Bash(cp:*)",
+      "Bash(git commit:*)",
+      "Bash(sed:*)",
+      "Bash(/home/braxten509/.nvm/versions/node/v22.15.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -A 3 -B 3 \"old|legacy|backward|compat|version\" \"/mnt/c/Users/braxt/Desktop/Desktop/doTERRA App 2.0/doTERRA App 2.0/src/main/java/com/doterra/app/view/TodoPanel.java\")",
+      "Bash(/home/braxten509/.nvm/versions/node/v22.15.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -n \"addTaskListeners|saveTodoData\" src/main/java/com/doterra/app/view/TodoPanel.java)"
     ]
   },
   "enableAllProjectMcpServers": false

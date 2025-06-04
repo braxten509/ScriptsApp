@@ -10,6 +10,8 @@ import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.control.cell.CheckBoxTableCell;
+import javafx.event.ActionEvent;
+import javafx.event.EventHandler;
 import javafx.scene.input.*;
 import javafx.scene.layout.*;
 import javafx.scene.layout.Region;
@@ -557,6 +559,7 @@ public class TodoPanel extends BorderPane {
         task.nameProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
         task.idProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
         task.descriptionProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
+        task.waitUntilProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
         task.lastContactedProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
         task.dateCreatedProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
     }
@@ -927,15 +930,21 @@ public class TodoPanel extends BorderPane {
                 if (selected != null) {
                     commitEdit(selected);
                     if (selected == TaskStatus.WAIT_UNTIL) {
-                        // Set default time if none exists
+                        // Set default time if none exists and capture task reference
+                        TodoTask currentTask = null;
                         if (getTableView() != null && getIndex() >= 0 && getIndex() < getTableView().getItems().size()) {
-                            TodoTask task = getTableView().getItems().get(getIndex());
-                            if (task.getWaitUntil() == null) {
+                            currentTask = getTableView().getItems().get(getIndex());
+                            if (currentTask.getWaitUntil() == null) {
                                 // Set default to today at 9:00 AM
-                                task.setWaitUntil(java.time.LocalDate.now().atTime(9, 0));
+                                currentTask.setWaitUntil(java.time.LocalDate.now().atTime(9, 0));
                             }
                         }
-                        showDateTimePicker();
+                        // Capture task reference for deferred execution
+                        final TodoTask taskToEdit = currentTask;
+                        if (taskToEdit != null) {
+                            // Defer showing the dialog to avoid layout conflicts
+                            javafx.application.Platform.runLater(() -> showDateTimePicker(taskToEdit));
+                        }
                     } else {
                         // Clear wait until time for other statuses
                         if (getTableView() != null && getIndex() >= 0 && getIndex() < getTableView().getItems().size()) {
@@ -947,7 +956,7 @@ public class TodoPanel extends BorderPane {
             });
         }
         
-        private void showDateTimePicker() {
+        private void showDateTimePicker(TodoTask task) {
             Dialog<LocalDateTime> dialog = new Dialog<>();
             dialog.setTitle("Select Date and Time");
             dialog.setHeaderText("Choose when to wait until:");
@@ -958,7 +967,6 @@ public class TodoPanel extends BorderPane {
             grid.setPadding(new Insets(20));
             
             // Get existing date/time if available
-            TodoTask task = getTableView().getItems().get(getIndex());
             LocalDateTime existingTime = task.getWaitUntil();
             
             DatePicker dialogDatePicker = new DatePicker();
@@ -1071,7 +1079,11 @@ public class TodoPanel extends BorderPane {
                 setGraphic(null);
                 setStyle("");
             } else {
+                // Temporarily disable action handler during programmatic update
+                EventHandler<ActionEvent> originalHandler = comboBox.getOnAction();
+                comboBox.setOnAction(null);
                 comboBox.setValue(status);
+                comboBox.setOnAction(originalHandler);
                 
                 // Apply color to the combo box based on status
                 Color color = status.getColor();
@@ -1491,13 +1503,8 @@ public class TodoPanel extends BorderPane {
     private void addNewTask() {
         TodoTask newTask = new TodoTask("", "", "");
         
-        // Add listeners to save data when task is modified
-        newTask.statusProperty().addListener((obs, oldStatus, newStatus) -> saveTodoData());
-        newTask.nameProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
-        newTask.idProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
-        newTask.descriptionProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
-        newTask.lastContactedProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
-        newTask.dateCreatedProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
+        // Add listeners to save data when task is modified using the helper method
+        addTaskListeners(newTask);
         
         activeTasks.add(newTask);
         saveTodoData();
@@ -1560,13 +1567,8 @@ public class TodoPanel extends BorderPane {
             completedTask.getDescription()
         );
         
-        // Add listeners to save data when task is modified
-        restoredTask.statusProperty().addListener((obs, oldStatus, newStatus) -> saveTodoData());
-        restoredTask.nameProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
-        restoredTask.idProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
-        restoredTask.descriptionProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
-        restoredTask.lastContactedProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
-        restoredTask.dateCreatedProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
+        // Add listeners to save data when task is modified using the helper method
+        addTaskListeners(restoredTask);
         
         // Remove from completed tasks and add to active tasks
         completedTasks.remove(completedTask);

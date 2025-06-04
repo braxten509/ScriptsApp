@@ -193,7 +193,7 @@ public class MainView {
         // Position badge in top-right corner
         StackPane.setAlignment(badge, Pos.TOP_RIGHT);
         badge.setTranslateX(-5);
-        badge.setTranslateY(5);
+        badge.setTranslateY(4);
         
         // Bind badge text and visibility to the count property
         badgeCountProperty.addListener((obs, oldCount, newCount) -> {

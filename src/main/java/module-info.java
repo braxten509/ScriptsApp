@@ -12,6 +12,7 @@ module org.bchenay.doterraapp20 {
     requires com.almasb.fxgl.all;
     requires java.scripting;
     requires java.desktop;
+    requires org.fxmisc.richtext;
 
     opens org.bchenay.doterraapp20 to javafx.fxml;
     exports org.bchenay.doterraapp20;
