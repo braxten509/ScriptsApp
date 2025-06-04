@@ -140,12 +140,25 @@ public class RegexEditorPanel extends BorderPane {
         
         templateBar.getChildren().addAll(templateLabel, templateComboBox, saveBtn, newBtn, duplicateBtn, renameBtn, deleteBtn, setDefaultBtn);
         
+        // Input section with label and clear button
+        HBox inputHeader = new HBox(10);
+        inputHeader.setAlignment(Pos.CENTER_LEFT);
         Label inputLabel = new Label("Input Text:");
+        
+        // Spacer to push clear button to the right
+        Region inputSpacer = new Region();
+        HBox.setHgrow(inputSpacer, Priority.ALWAYS);
+        
+        Button clearInputBtn = new Button("Clear Input");
+        clearInputBtn.setOnAction(e -> inputTextArea.clear());
+        
+        inputHeader.getChildren().addAll(inputLabel, inputSpacer, clearInputBtn);
+        
         inputTextArea = new TextArea();
         inputTextArea.setPrefRowCount(8);
         inputTextArea.setPromptText("Paste or type your raw text here...");
         
-        topSection.getChildren().addAll(templateBar, inputLabel, inputTextArea);
+        topSection.getChildren().addAll(templateBar, inputHeader, inputTextArea);
         
         // Center: Split pane with patterns table and template editor
         SplitPane centerSplit = new SplitPane();
