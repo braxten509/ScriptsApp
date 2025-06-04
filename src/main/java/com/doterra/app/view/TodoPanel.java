@@ -352,20 +352,55 @@ public class TodoPanel extends BorderPane {
                 return; // No saved data yet
             }
             
-            TodoData data;
+            Object loadedData;
             try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(TODO_DATA_FILE))) {
-                data = (TodoData) ois.readObject();
+                loadedData = ois.readObject();
             }
             
             // Clear existing data
             activeTasks.clear();
             completedTasks.clear();
             
-            // Load active tasks
+            // Handle different data format versions
+            if (loadedData instanceof TodoData) {
+                // Current format (version 3+)
+                loadCurrentFormat((TodoData) loadedData);
+            } else if (loadedData instanceof List) {
+                // Legacy format - likely a simple list of tasks
+                loadLegacyListFormat((List<?>) loadedData);
+            } else if (loadedData instanceof Map) {
+                // Legacy format - might be a map-based structure
+                loadLegacyMapFormat((Map<?, ?>) loadedData);
+            } else {
+                // Try to handle as older TodoData format with different serialVersionUID
+                loadOlderTodoDataFormat(loadedData);
+            }
+            
+        } catch (Exception e) {
+            System.err.println("Error loading todo data: " + e.getMessage());
+            e.printStackTrace(); // More detailed error information for debugging
+        }
+    }
+    
+    /**
+     * Load data using the current TodoData format (version 3+)
+     */
+    private void loadCurrentFormat(TodoData data) {
+        // Load active tasks
+        if (data.activeTasks != null) {
             for (SerializableTodoTask serializable : data.activeTasks) {
-                TodoTask task = new TodoTask(serializable.name, serializable.id, serializable.description);
-                task.setStatus(serializable.status);
-                task.setWaitUntil(serializable.waitUntil);
+                TodoTask task = new TodoTask(
+                    serializable.name != null ? serializable.name : "Untitled", 
+                    serializable.id != null ? serializable.id : UUID.randomUUID().toString(), 
+                    serializable.description != null ? serializable.description : ""
+                );
+                
+                if (serializable.status != null) {
+                    task.setStatus(serializable.status);
+                }
+                if (serializable.waitUntil != null) {
+                    task.setWaitUntil(serializable.waitUntil);
+                }
                 // Handle new fields for backward compatibility
                 if (serializable.lastContacted != null) {
                     task.setLastContacted(serializable.lastContacted);
@@ -374,33 +409,156 @@ public class TodoPanel extends BorderPane {
                     task.setDateCreated(serializable.dateCreated);
                 }
                 activeTasks.add(task);
-                
-                // Add listener for status changes to trigger saves
-                task.statusProperty().addListener((obs, oldStatus, newStatus) -> saveTodoData());
-                task.nameProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
-                task.idProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
-                task.descriptionProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
-                task.lastContactedProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
-                task.dateCreatedProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
+                addTaskListeners(task);
             }
-            
-            // Load completed tasks
+        }
+        
+        // Load completed tasks
+        if (data.completedTasks != null) {
             for (SerializableCompletedTask serializable : data.completedTasks) {
-                CompletedTask task = new CompletedTask(serializable.name, serializable.id, serializable.description, serializable.completedDate);
+                CompletedTask task = new CompletedTask(
+                    serializable.name != null ? serializable.name : "Untitled",
+                    serializable.id != null ? serializable.id : UUID.randomUUID().toString(),
+                    serializable.description != null ? serializable.description : "",
+                    serializable.completedDate != null ? serializable.completedDate : LocalDateTime.now()
+                );
                 completedTasks.add(task);
             }
-            
-            // Load column widths (handle backward compatibility)
-            if (data.activeTableColumnWidths != null) {
-                loadedActiveColumnWidths.putAll(data.activeTableColumnWidths);
-            }
-            if (data.completedTableColumnWidths != null) {
-                loadedCompletedColumnWidths.putAll(data.completedTableColumnWidths);
-            }
-            
-        } catch (Exception e) {
-            System.err.println("Error loading todo data: " + e.getMessage());
         }
+        
+        // Load column widths (handle backward compatibility)
+        if (data.activeTableColumnWidths != null) {
+            loadedActiveColumnWidths.putAll(data.activeTableColumnWidths);
+        }
+        if (data.completedTableColumnWidths != null) {
+            loadedCompletedColumnWidths.putAll(data.completedTableColumnWidths);
+        }
+    }
+    
+    /**
+     * Load legacy format that was a simple list of tasks
+     */
+    @SuppressWarnings("unchecked")
+    private void loadLegacyListFormat(List<?> taskList) {
+        System.out.println("Loading legacy list format TODO data...");
+        
+        for (Object taskObj : taskList) {
+            try {
+                // Try to extract task information using reflection or known patterns
+                if (taskObj instanceof Map) {
+                    Map<String, Object> taskMap = (Map<String, Object>) taskObj;
+                    String name = (String) taskMap.getOrDefault("name", "Imported Task");
+                    String description = (String) taskMap.getOrDefault("description", "");
+                    String id = (String) taskMap.getOrDefault("id", UUID.randomUUID().toString());
+                    
+                    TodoTask task = new TodoTask(name, id, description);
+                    
+                    // Try to get status if available
+                    Object statusObj = taskMap.get("status");
+                    if (statusObj instanceof String) {
+                        try {
+                            TaskStatus status = TaskStatus.valueOf((String) statusObj);
+                            task.setStatus(status);
+                        } catch (IllegalArgumentException e) {
+                            // Use default status
+                        }
+                    }
+                    
+                    activeTasks.add(task);
+                    addTaskListeners(task);
+                } else {
+                    // Handle other task object formats
+                    String taskName = taskObj.toString();
+                    if (taskName != null && !taskName.trim().isEmpty()) {
+                        TodoTask task = new TodoTask(taskName, UUID.randomUUID().toString(), "");
+                        activeTasks.add(task);
+                        addTaskListeners(task);
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("Error loading legacy task: " + e.getMessage());
+            }
+        }
+    }
+    
+    /**
+     * Load legacy format that was a map-based structure
+     */
+    @SuppressWarnings("unchecked")
+    private void loadLegacyMapFormat(Map<?, ?> dataMap) {
+        System.out.println("Loading legacy map format TODO data...");
+        
+        try {
+            // Try to find tasks in the map
+            Object tasksObj = dataMap.get("tasks");
+            if (tasksObj == null) {
+                tasksObj = dataMap.get("activeTasks");
+            }
+            if (tasksObj == null) {
+                tasksObj = dataMap.get("todoTasks");
+            }
+            
+            if (tasksObj instanceof List) {
+                loadLegacyListFormat((List<?>) tasksObj);
+            } else {
+                // Try to convert map entries to tasks
+                for (Map.Entry<?, ?> entry : dataMap.entrySet()) {
+                    String key = entry.getKey().toString();
+                    String value = entry.getValue().toString();
+                    
+                    if (!key.isEmpty() && !value.isEmpty()) {
+                        TodoTask task = new TodoTask(key, UUID.randomUUID().toString(), value);
+                        activeTasks.add(task);
+                        addTaskListeners(task);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error loading legacy map format: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Try to load older TodoData formats with different serialVersionUID
+     */
+    private void loadOlderTodoDataFormat(Object data) {
+        System.out.println("Attempting to load older TodoData format...");
+        
+        try {
+            // Use reflection to access fields that might exist in older versions
+            java.lang.reflect.Field[] fields = data.getClass().getDeclaredFields();
+            
+            for (java.lang.reflect.Field field : fields) {
+                field.setAccessible(true);
+                Object value = field.get(data);
+                
+                if (field.getName().contains("task") && value instanceof List) {
+                    loadLegacyListFormat((List<?>) value);
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error loading older TodoData format: " + e.getMessage());
+            // As a last resort, create a single task with the object's string representation
+            String taskName = data.toString();
+            if (taskName != null && !taskName.trim().isEmpty() && !taskName.contains("@")) {
+                TodoTask task = new TodoTask("Imported: " + taskName, UUID.randomUUID().toString(), "Automatically imported from old format");
+                activeTasks.add(task);
+                addTaskListeners(task);
+            }
+        }
+    }
+    
+    /**
+     * Add all necessary listeners to a task
+     */
+    private void addTaskListeners(TodoTask task) {
+        task.statusProperty().addListener((obs, oldStatus, newStatus) -> saveTodoData());
+        task.nameProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
+        task.idProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
+        task.descriptionProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
+        task.lastContactedProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
+        task.dateCreatedProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
     }
     
     /**

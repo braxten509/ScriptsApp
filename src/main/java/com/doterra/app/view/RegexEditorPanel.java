@@ -38,6 +38,14 @@ import org.fxmisc.richtext.model.StyleSpans;
 import org.fxmisc.richtext.model.StyleSpansBuilder;
 import javafx.geometry.Point2D;
 import javafx.util.Duration;
+import javafx.stage.Stage;
+import javafx.scene.Scene;
+import javafx.geometry.Rectangle2D;
+import javafx.stage.Screen;
+import javafx.stage.StageStyle;
+import javafx.scene.control.ContextMenu;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.TableRow;
 
 public class RegexEditorPanel extends BorderPane {
     private static final String TEMPLATES_FILE = "data/regex_templates.dat";
@@ -53,6 +61,7 @@ public class RegexEditorPanel extends BorderPane {
     private List<RegexTemplate> templates;
     private RegexTemplate currentTemplate;
     private Map<String, Double> columnWidths = new HashMap<>();
+    private Stage popOutWindow;
     
     public RegexEditorPanel() {
         patterns = FXCollections.observableArrayList();
@@ -173,6 +182,9 @@ public class RegexEditorPanel extends BorderPane {
         
         patternsTable.getColumns().addAll(nameCol, patternCol);
         
+        // Add context menu to patterns table
+        setupPatternsContextMenu();
+        
         // Apply saved column widths
         applyColumnWidths();
         
@@ -229,10 +241,15 @@ public class RegexEditorPanel extends BorderPane {
         
         Button processBtn = new Button("Process");
         Button clearBtn = new Button("Clear Output");
+        Button popOutBtn = new Button("Pop Out");
         processBtn.setOnAction(e -> processTemplate());
         clearBtn.setOnAction(e -> outputFlow.getChildren().clear());
+        popOutBtn.setOnAction(e -> {
+            processTemplate();
+            createPopOutWindow();
+        });
         
-        outputHeader.getChildren().addAll(outputLabel, spacer, processBtn, clearBtn);
+        outputHeader.getChildren().addAll(outputLabel, spacer, processBtn, clearBtn, popOutBtn);
         
         // Create TextFlow for clickable output
         outputFlow = new TextFlow();
@@ -1141,6 +1158,287 @@ public class RegexEditorPanel extends BorderPane {
                 }
             }
         }
+    }
+    
+    /**
+     * Creates a detached pop-out window with the current output content
+     */
+    private void createPopOutWindow() {
+        // Don't create pop-out if there's no content
+        if (outputFlow.getChildren().isEmpty()) {
+            return;
+        }
+        
+        // Close existing pop-out window if it exists
+        if (popOutWindow != null) {
+            popOutWindow.close();
+        }
+        
+        // Create new stage for pop-out window
+        popOutWindow = new Stage();
+        popOutWindow.setTitle("Regex Output");
+        popOutWindow.setAlwaysOnTop(true);
+        
+        // Create a new TextFlow with copied content
+        TextFlow popOutContent = new TextFlow();
+        popOutContent.setPadding(new Insets(10, 10, 5, 10));
+        
+        // Copy all nodes from the original output
+        for (Node node : outputFlow.getChildren()) {
+            Node copiedNode = copyNode(node);
+            if (copiedNode != null) {
+                popOutContent.getChildren().add(copiedNode);
+            }
+        }
+        
+        // Create scroll pane for the content
+        ScrollPane scrollPane = new ScrollPane(popOutContent);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setFitToHeight(false);
+        scrollPane.setStyle("-fx-background-color: white; -fx-border-color: #cccccc; -fx-border-width: 1px;");
+        
+        // Calculate content height with minimum and maximum bounds
+        double minHeight = 100; // Minimum window height
+        double maxHeight = 400; // Maximum window height to prevent oversized windows
+        double padding = 25; // Extra padding for window chrome and borders
+        
+        // Force layout to calculate actual content size
+        popOutContent.autosize();
+        popOutContent.applyCss();
+        popOutContent.layout();
+        
+        // Get the preferred height of the content
+        double contentHeight = popOutContent.prefHeight(-1) + padding;
+        double windowHeight = Math.max(minHeight, Math.min(maxHeight, contentHeight));
+        
+        // Create scene with calculated height
+        Scene scene = new Scene(scrollPane, 800, windowHeight);
+        scene.getStylesheets().add(getClass().getResource("/styles/main.css").toExternalForm());
+        popOutWindow.setScene(scene);
+        
+        // Position window at top of screen
+        Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
+        popOutWindow.setX(screenBounds.getMinX() + (screenBounds.getWidth() - 800) / 2);
+        popOutWindow.setY(screenBounds.getMinY());
+        
+        // Show the window
+        popOutWindow.show();
+        
+        // Handle window closing
+        popOutWindow.setOnCloseRequest(e -> popOutWindow = null);
+    }
+    
+    /**
+     * Creates a copy of a node for the pop-out window
+     */
+    private Node copyNode(Node original) {
+        if (original instanceof Text) {
+            Text originalText = (Text) original;
+            Text copy = new Text(originalText.getText());
+            copy.setFont(originalText.getFont());
+            copy.setFill(originalText.getFill());
+            return copy;
+        } else if (original instanceof Hyperlink) {
+            Hyperlink originalLink = (Hyperlink) original;
+            Hyperlink copy = new Hyperlink(originalLink.getText());
+            copy.setStyle(originalLink.getStyle());
+            
+            // Copy the click action
+            copy.setOnAction(e -> {
+                ClipboardContent content = new ClipboardContent();
+                content.putString(originalLink.getText());
+                Clipboard.getSystemClipboard().setContent(content);
+            });
+            
+            // Copy tooltip if it exists
+            if (originalLink.getTooltip() != null) {
+                Tooltip originalTooltip = originalLink.getTooltip();
+                Tooltip copyTooltip = new Tooltip(originalTooltip.getText());
+                Tooltip.install(copy, copyTooltip);
+            }
+            
+            return copy;
+        }
+        
+        // For other node types, create a text representation
+        return new Text(original.toString());
+    }
+    
+    /**
+     * Sets up context menu for the patterns table
+     */
+    private void setupPatternsContextMenu() {
+        ContextMenu contextMenu = new ContextMenu();
+        
+        MenuItem openEditorItem = new MenuItem("Open Editor");
+        openEditorItem.setOnAction(e -> {
+            PatternEntry selected = patternsTable.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                openRegexEditor(selected);
+            }
+        });
+        
+        MenuItem deleteItem = new MenuItem("Delete");
+        deleteItem.setOnAction(e -> {
+            PatternEntry selected = patternsTable.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                patterns.remove(selected);
+                // Re-validate template syntax when patterns change
+                validateTemplateSyntax(templateArea.getText());
+            }
+        });
+        
+        contextMenu.getItems().addAll(openEditorItem, deleteItem);
+        
+        // Set context menu to show only when right-clicking on a row
+        patternsTable.setRowFactory(tv -> {
+            TableRow<PatternEntry> row = new TableRow<>();
+            row.setOnContextMenuRequested(event -> {
+                if (!row.isEmpty()) {
+                    patternsTable.getSelectionModel().select(row.getItem());
+                    contextMenu.show(row, event.getScreenX(), event.getScreenY());
+                }
+            });
+            return row;
+        });
+    }
+    
+    /**
+     * Opens a dedicated regex editor window for better pattern editing
+     */
+    private void openRegexEditor(PatternEntry pattern) {
+        Stage editorStage = new Stage();
+        editorStage.setTitle("Regex Editor - " + pattern.getName());
+        editorStage.setAlwaysOnTop(true);
+        
+        VBox root = new VBox(10);
+        root.setPadding(new Insets(15));
+        
+        // Pattern name field
+        Label nameLabel = new Label("Pattern Name:");
+        TextField nameField = new TextField(pattern.getName());
+        nameField.setPrefWidth(400);
+        
+        // Pattern regex field with larger area
+        Label regexLabel = new Label("Regular Expression:");
+        TextArea regexArea = new TextArea(pattern.getPattern());
+        regexArea.setPrefRowCount(8);
+        regexArea.setPrefWidth(400);
+        regexArea.setWrapText(true);
+        regexArea.setStyle("-fx-font-family: 'Courier New', monospace; -fx-font-size: 14px;");
+        
+        // Validation feedback
+        Label validationLabel = new Label();
+        validationLabel.setStyle("-fx-text-fill: red;");
+        
+        // Real-time validation
+        regexArea.textProperty().addListener((obs, oldText, newText) -> {
+            try {
+                Pattern.compile(newText);
+                validationLabel.setText("✓ Valid regex pattern");
+                validationLabel.setStyle("-fx-text-fill: green;");
+                regexArea.setStyle("-fx-font-family: 'Courier New', monospace; -fx-font-size: 14px; -fx-border-color: #4CAF50; -fx-border-width: 1px;");
+            } catch (PatternSyntaxException e) {
+                validationLabel.setText("✗ Invalid regex: " + e.getDescription());
+                validationLabel.setStyle("-fx-text-fill: red;");
+                regexArea.setStyle("-fx-font-family: 'Courier New', monospace; -fx-font-size: 14px; -fx-border-color: #F44336; -fx-border-width: 1px;");
+            }
+        });
+        
+        // Trigger initial validation
+        regexArea.textProperty().setValue(regexArea.getText());
+        
+        // Test area
+        Label testLabel = new Label("Test Text (optional):");
+        TextArea testArea = new TextArea();
+        testArea.setPrefRowCount(3);
+        testArea.setPromptText("Enter text to test the regex pattern against...");
+        
+        // Test results
+        Label resultsLabel = new Label("Test Results:");
+        TextArea resultsArea = new TextArea();
+        resultsArea.setPrefRowCount(4);
+        resultsArea.setEditable(false);
+        resultsArea.setStyle("-fx-background-color: #f8f8f8;");
+        
+        // Test button
+        Button testButton = new Button("Test Pattern");
+        testButton.setOnAction(e -> {
+            String regexText = regexArea.getText();
+            String testText = testArea.getText();
+            
+            if (regexText.isEmpty() || testText.isEmpty()) {
+                resultsArea.setText("Please enter both a regex pattern and test text.");
+                return;
+            }
+            
+            try {
+                Pattern testPattern = Pattern.compile(regexText);
+                Matcher matcher = testPattern.matcher(testText);
+                StringBuilder results = new StringBuilder();
+                
+                int matchCount = 0;
+                while (matcher.find()) {
+                    matchCount++;
+                    results.append("Match ").append(matchCount).append(": \"").append(matcher.group()).append("\"\n");
+                    for (int i = 1; i <= matcher.groupCount(); i++) {
+                        results.append("  Group ").append(i).append(": \"").append(matcher.group(i)).append("\"\n");
+                    }
+                    results.append("\n");
+                }
+                
+                if (matchCount == 0) {
+                    results.append("No matches found.");
+                }
+                
+                resultsArea.setText(results.toString());
+            } catch (PatternSyntaxException ex) {
+                resultsArea.setText("Error: " + ex.getDescription());
+            }
+        });
+        
+        // Buttons
+        HBox buttonBox = new HBox(10);
+        buttonBox.setAlignment(Pos.CENTER_RIGHT);
+        
+        Button saveButton = new Button("Save");
+        saveButton.setOnAction(e -> {
+            try {
+                Pattern.compile(regexArea.getText()); // Validate before saving
+                pattern.setName(nameField.getText());
+                pattern.setPattern(regexArea.getText());
+                patternsTable.refresh();
+                // Re-validate template syntax when patterns change
+                validateTemplateSyntax(templateArea.getText());
+                editorStage.close();
+            } catch (PatternSyntaxException ex) {
+                showAlert("Cannot save invalid regex pattern: " + ex.getDescription());
+            }
+        });
+        
+        Button cancelButton = new Button("Cancel");
+        cancelButton.setOnAction(e -> editorStage.close());
+        
+        buttonBox.getChildren().addAll(cancelButton, saveButton);
+        
+        root.getChildren().addAll(
+            nameLabel, nameField,
+            regexLabel, regexArea, validationLabel,
+            testLabel, testArea, testButton,
+            resultsLabel, resultsArea,
+            buttonBox
+        );
+        
+        Scene scene = new Scene(root, 450, 600);
+        scene.getStylesheets().add(getClass().getResource("/styles/main.css").toExternalForm());
+        editorStage.setScene(scene);
+        
+        // Position window near the main window
+        Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
+        editorStage.setX(screenBounds.getMinX() + (screenBounds.getWidth() - 450) / 2);
+        editorStage.setY(screenBounds.getMinY() + 50);
+        
+        editorStage.show();
     }
     
     /**

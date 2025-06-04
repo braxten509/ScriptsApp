@@ -389,12 +389,15 @@ public class EmailScriptsPanel {
             // Reset the flag after content is set
             isVariableReplacement = false;
             
-            // Copy to clipboard as HTML for email clients
-            ClipboardContent content = new ClipboardContent();
-            content.putHtml(clipboardContent);
-            // Also provide plain text version for compatibility
-            content.putString(clipboardContent.replaceAll("<[^>]*>", ""));
-            Clipboard.getSystemClipboard().setContent(content);
+            // Copy to clipboard only if content is not empty
+            String plainTextContent = clipboardContent.replaceAll("<[^>]*>", "").trim();
+            if (clipboardContent != null && !plainTextContent.isEmpty()) {
+                ClipboardContent content = new ClipboardContent();
+                content.putHtml(clipboardContent);
+                // Also provide plain text version for compatibility
+                content.putString(plainTextContent);
+                Clipboard.getSystemClipboard().setContent(content);
+            }
             
             // Visual feedback for selection
             clearButtonSelection();

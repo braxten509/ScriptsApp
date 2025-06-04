@@ -393,10 +393,12 @@ public class ChatScriptsPanel {
             // Reset the flag after text is set
             isVariableReplacement = false;
             
-            // Copy to clipboard
-            ClipboardContent content = new ClipboardContent();
-            content.putString(clipboardContent);
-            Clipboard.getSystemClipboard().setContent(content);
+            // Copy to clipboard only if content is not empty
+            if (clipboardContent != null && !clipboardContent.trim().isEmpty()) {
+                ClipboardContent content = new ClipboardContent();
+                content.putString(clipboardContent);
+                Clipboard.getSystemClipboard().setContent(content);
+            }
             
             // Visual feedback for selection
             clearButtonSelection();

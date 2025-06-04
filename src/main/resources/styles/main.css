@@ -140,7 +140,7 @@
     -fx-underline: true;
     -fx-strikethrough: false;
     -fx-text-fill: #000000;
-    -rtfx-underline-color: #B71C1C;
+    -rtfx-underline-color: #D32F2F;
     -rtfx-underline-dash-array: none;
-    -rtfx-underline-width: 1px;
+    -rtfx-underline-width: 2px;
 }
