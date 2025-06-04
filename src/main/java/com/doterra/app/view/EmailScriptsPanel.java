@@ -23,12 +23,16 @@ import javafx.scene.web.HTMLEditor;
 import javafx.stage.StageStyle;
 
 import java.util.Optional;
+import java.io.*;
+import java.util.Properties;
 
 public class EmailScriptsPanel {
+    private static final String PREFERENCES_FILE = "data/email_scripts_preferences.dat";
     
     private final BorderPane root;
     private final TabPane tabPane;
     private final HtmlEditor htmlEditor;
+    private final SplitPane splitPane;
     private ButtonController buttonController;
     private ScriptButton selectedButton;
     private String originalContent; // Track original content for change detection
@@ -79,12 +83,18 @@ public class EmailScriptsPanel {
         htmlEditor.setManaged(false);
         
         // Create a SplitPane for resizable HTML editor
-        SplitPane splitPane = new SplitPane();
+        splitPane = new SplitPane();
         splitPane.setOrientation(javafx.geometry.Orientation.VERTICAL);
         splitPane.getItems().addAll(centerSection, htmlEditor);
         
-        // Set initial divider position (70% for buttons, 30% for HTML editor)
-        splitPane.setDividerPositions(0.7);
+        // Load saved divider position or use default
+        double dividerPosition = loadDividerPosition();
+        splitPane.setDividerPositions(dividerPosition);
+        
+        // Add listener to save divider position when it changes
+        splitPane.getDividers().get(0).positionProperty().addListener((obs, oldVal, newVal) -> {
+            saveDividerPosition(newVal.doubleValue());
+        });
         
         // Set minimum sizes to keep buttons visible
         centerSection.setMinHeight(300);
@@ -1425,5 +1435,61 @@ public class EmailScriptsPanel {
             }
         }
         return true; // No changes to save
+    }
+    
+    /**
+     * Loads the saved divider position from preferences file.
+     * @return the saved divider position, or 0.7 as default
+     */
+    private double loadDividerPosition() {
+        try {
+            File file = new File(PREFERENCES_FILE);
+            if (file.exists()) {
+                Properties props = new Properties();
+                try (FileInputStream fis = new FileInputStream(file)) {
+                    props.load(fis);
+                    String position = props.getProperty("splitPaneDividerPosition");
+                    if (position != null) {
+                        return Double.parseDouble(position);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Silently ignore and use default
+        }
+        return 0.7; // Default position
+    }
+    
+    /**
+     * Saves the divider position to preferences file.
+     * @param position the divider position to save
+     */
+    private void saveDividerPosition(double position) {
+        try {
+            // Ensure parent directory exists
+            File file = new File(PREFERENCES_FILE);
+            File parentDir = file.getParentFile();
+            if (parentDir != null && !parentDir.exists()) {
+                parentDir.mkdirs();
+            }
+            
+            // Load existing properties or create new
+            Properties props = new Properties();
+            if (file.exists()) {
+                try (FileInputStream fis = new FileInputStream(file)) {
+                    props.load(fis);
+                }
+            }
+            
+            // Update divider position
+            props.setProperty("splitPaneDividerPosition", String.valueOf(position));
+            
+            // Save properties
+            try (FileOutputStream fos = new FileOutputStream(file)) {
+                props.store(fos, "Email Scripts Panel Preferences");
+            }
+        } catch (Exception e) {
+            // Silently ignore save errors
+        }
     }
 }

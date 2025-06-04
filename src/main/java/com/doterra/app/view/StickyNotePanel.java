@@ -26,16 +26,19 @@ import java.time.format.DateTimeFormatter;
 public class StickyNotePanel extends VBox {
     
     private static final String STICKY_NOTES_FILE = "data/sticky_notes.dat";
+    private static final String PREFERENCES_FILE = "data/sticky_notes_preferences.dat";
     private ObservableList<StickyNote> stickyNotes;
     private Map<String, Stage> openWindows;
     private Map<String, TextArea> noteTextAreas;
     private TableView<StickyNote> notesTable;
+    private Map<String, Double> columnWidths = new HashMap<>();
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm");
     
     public StickyNotePanel() {
         stickyNotes = FXCollections.observableArrayList();
         openWindows = new HashMap<>();
         noteTextAreas = new HashMap<>();
+        loadPreferences();
         initializePanel();
         loadStickyNotes();
     }
@@ -81,6 +84,8 @@ public class StickyNotePanel extends VBox {
         TableColumn<StickyNote, String> titleColumn = new TableColumn<>("Title");
         titleColumn.setCellValueFactory(new PropertyValueFactory<>("title"));
         titleColumn.setPrefWidth(200);
+        titleColumn.setMinWidth(100);
+        titleColumn.setResizable(true);
         titleColumn.setStyle("-fx-alignment: CENTER;");
         
         TableColumn<StickyNote, String> modifiedColumn = new TableColumn<>("Last Modified");
@@ -90,10 +95,14 @@ public class StickyNotePanel extends VBox {
             );
         });
         modifiedColumn.setPrefWidth(150);
+        modifiedColumn.setMinWidth(100);
+        modifiedColumn.setResizable(true);
         modifiedColumn.setStyle("-fx-alignment: CENTER;");
         
         TableColumn<StickyNote, Void> actionsColumn = new TableColumn<>("Actions");
         actionsColumn.setPrefWidth(280);
+        actionsColumn.setMinWidth(200);
+        actionsColumn.setResizable(true);
         actionsColumn.setStyle("-fx-alignment: CENTER;");
         
         Callback<TableColumn<StickyNote, Void>, TableCell<StickyNote, Void>> cellFactory = 
@@ -154,6 +163,17 @@ public class StickyNotePanel extends VBox {
         
         notesTable.getColumns().addAll(titleColumn, modifiedColumn, actionsColumn);
         notesTable.setItems(stickyNotes);
+        
+        // Use CONSTRAINED_RESIZE_POLICY to make the table stretch to fill available width
+        notesTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        
+        // Apply saved column widths
+        applyColumnWidths();
+        
+        // Add listeners to save column widths when they change
+        titleColumn.widthProperty().addListener((obs, oldWidth, newWidth) -> savePreferences());
+        modifiedColumn.widthProperty().addListener((obs, oldWidth, newWidth) -> savePreferences());
+        actionsColumn.widthProperty().addListener((obs, oldWidth, newWidth) -> savePreferences());
         
         // Add double-click handler to open notes
         notesTable.setOnMouseClicked(event -> {
@@ -437,6 +457,7 @@ public class StickyNotePanel extends VBox {
      */
     public void cleanup() {
         saveStickyNotes();
+        savePreferences();
         
         // Close all open windows
         for (Stage window : openWindows.values()) {
@@ -446,5 +467,66 @@ public class StickyNotePanel extends VBox {
         }
         openWindows.clear();
         noteTextAreas.clear();
+    }
+    
+    /**
+     * Load UI preferences including column widths
+     */
+    @SuppressWarnings("unchecked")
+    private void loadPreferences() {
+        File file = new File(PREFERENCES_FILE);
+        if (file.exists()) {
+            try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
+                columnWidths = (Map<String, Double>) ois.readObject();
+            } catch (Exception e) {
+                columnWidths = new HashMap<>();
+            }
+        }
+    }
+    
+    /**
+     * Save UI preferences including column widths
+     */
+    private void savePreferences() {
+        try {
+            // Save current column widths
+            for (TableColumn<StickyNote, ?> column : notesTable.getColumns()) {
+                if (column.getText() != null && !column.getText().isEmpty()) {
+                    columnWidths.put(column.getText(), column.getWidth());
+                }
+            }
+            
+            // Ensure parent directory exists
+            File file = new File(PREFERENCES_FILE);
+            File parentDir = file.getParentFile();
+            if (parentDir != null && !parentDir.exists()) {
+                parentDir.mkdirs();
+            }
+            
+            try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(PREFERENCES_FILE))) {
+                oos.writeObject(columnWidths);
+            }
+        } catch (Exception e) {
+            // Silently ignore preference save errors
+        }
+    }
+    
+    /**
+     * Apply saved column widths to the table
+     */
+    private void applyColumnWidths() {
+        if (columnWidths == null || columnWidths.isEmpty()) {
+            return;
+        }
+        
+        for (TableColumn<StickyNote, ?> column : notesTable.getColumns()) {
+            String columnName = column.getText();
+            if (columnName != null && columnWidths.containsKey(columnName)) {
+                Double width = columnWidths.get(columnName);
+                if (width != null && width > 0) {
+                    column.setPrefWidth(width);
+                }
+            }
+        }
     }
 }

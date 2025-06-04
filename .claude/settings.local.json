@@ -41,7 +41,9 @@
       "Bash(/home/braxten509/.nvm/versions/node/v22.15.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -A 10 -B 5 \"setOnAction.*e.*->\" src/main/java/com/doterra/app/view/ChatScriptsPanel.java)",
       "Bash(/home/braxten509/.nvm/versions/node/v22.15.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -A 15 -B 5 \"VariableReplacer\" src/main/java/com/doterra/app/view/ChatScriptsPanel.java)",
       "Bash(/home/braxten509/.nvm/versions/node/v22.15.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -A 10 -B 2 \"showCreateButtonDialog|showRenameButtonDialog|showChangeColorDialog\" src/main/java/com/doterra/app/view/ChatScriptsPanel.java)",
-      "Bash(/home/braxten509/.nvm/versions/node/v22.15.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -A 20 \"private void showCreateButtonDialog\" src/main/java/com/doterra/app/view/ChatScriptsPanel.java)"
+      "Bash(/home/braxten509/.nvm/versions/node/v22.15.0/lib/node_modules/@anthropic-ai/claude-code/vendor/ripgrep/x64-linux/rg -A 20 \"private void showCreateButtonDialog\" src/main/java/com/doterra/app/view/ChatScriptsPanel.java)",
+      "Bash(java:*)",
+      "Bash(cp:*)"
     ]
   },
   "enableAllProjectMcpServers": false

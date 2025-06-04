@@ -40,3 +40,7 @@ build/
 ### Large files ###
 jdk-*.tar.gz
 *.tar.gz
+doTERRA-Portable.zip
+openjdk-17-jre.zip
+openjfx-17.zip
+doTERRA-Portable/app/*.jar

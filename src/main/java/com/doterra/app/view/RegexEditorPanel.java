@@ -20,23 +20,36 @@ import javafx.util.StringConverter;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.text.TextFlow;
+import javafx.scene.text.Text;
+import javafx.scene.control.Hyperlink;
+import javafx.scene.control.Tooltip;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
+import javafx.scene.Node;
+import java.util.Set;
+import java.util.HashSet;
 
 public class RegexEditorPanel extends BorderPane {
     private static final String TEMPLATES_FILE = "data/regex_templates.dat";
+    private static final String PREFERENCES_FILE = "data/regex_preferences.dat";
     
     private TextArea inputTextArea;
     private TextArea templateArea;
-    private TextArea outputArea;
+    private ScrollPane outputScrollPane;
+    private TextFlow outputFlow;
     private TableView<PatternEntry> patternsTable;
     private ObservableList<PatternEntry> patterns;
     private ComboBox<RegexTemplate> templateComboBox;
     private List<RegexTemplate> templates;
     private RegexTemplate currentTemplate;
+    private Map<String, Double> columnWidths = new HashMap<>();
     
     public RegexEditorPanel() {
         patterns = FXCollections.observableArrayList();
         templates = new ArrayList<>();
         loadTemplates();
+        loadPreferences();
         setupUI();
         
         // Load default template if exists
@@ -87,8 +100,11 @@ public class RegexEditorPanel extends BorderPane {
         Button saveBtn = new Button("Save");
         saveBtn.setOnAction(e -> saveCurrentTemplate());
         
-        Button saveAsBtn = new Button("Save As...");
-        saveAsBtn.setOnAction(e -> saveAsNewTemplate());
+        Button newBtn = new Button("New");
+        newBtn.setOnAction(e -> createNewTemplate());
+        
+        Button duplicateBtn = new Button("Duplicate");
+        duplicateBtn.setOnAction(e -> duplicateTemplate());
         
         Button renameBtn = new Button("Rename");
         renameBtn.setOnAction(e -> renameTemplate());
@@ -99,7 +115,7 @@ public class RegexEditorPanel extends BorderPane {
         Button setDefaultBtn = new Button("Set Default");
         setDefaultBtn.setOnAction(e -> setDefaultTemplate());
         
-        templateBar.getChildren().addAll(templateLabel, templateComboBox, saveBtn, saveAsBtn, renameBtn, deleteBtn, setDefaultBtn);
+        templateBar.getChildren().addAll(templateLabel, templateComboBox, saveBtn, newBtn, duplicateBtn, renameBtn, deleteBtn, setDefaultBtn);
         
         Label inputLabel = new Label("Input Text:");
         inputTextArea = new TextArea();
@@ -136,13 +152,24 @@ public class RegexEditorPanel extends BorderPane {
         nameCol.setCellValueFactory(new PropertyValueFactory<>("name"));
         nameCol.setCellFactory(createEditableTextFieldCellFactory());
         nameCol.setPrefWidth(100);
+        nameCol.setMinWidth(50);
+        nameCol.setResizable(true);
         
         TableColumn<PatternEntry, String> patternCol = new TableColumn<>("Pattern");
         patternCol.setCellValueFactory(new PropertyValueFactory<>("pattern"));
         patternCol.setCellFactory(createPatternCellFactory());
         patternCol.setPrefWidth(200);
+        patternCol.setMinWidth(100);
+        patternCol.setResizable(true);
         
         patternsTable.getColumns().addAll(nameCol, patternCol);
+        
+        // Apply saved column widths
+        applyColumnWidths();
+        
+        // Add listeners to save column widths when they change
+        nameCol.widthProperty().addListener((obs, oldWidth, newWidth) -> savePreferences());
+        patternCol.widthProperty().addListener((obs, oldWidth, newWidth) -> savePreferences());
         VBox.setVgrow(patternsTable, Priority.ALWAYS);
         
         patternsSection.getChildren().addAll(patternButtons, patternsTable);
@@ -184,15 +211,23 @@ public class RegexEditorPanel extends BorderPane {
         Button processBtn = new Button("Process");
         Button clearBtn = new Button("Clear Output");
         processBtn.setOnAction(e -> processTemplate());
-        clearBtn.setOnAction(e -> outputArea.clear());
+        clearBtn.setOnAction(e -> outputFlow.getChildren().clear());
         
         outputHeader.getChildren().addAll(outputLabel, spacer, processBtn, clearBtn);
         
-        outputArea = new TextArea();
-        outputArea.setPrefRowCount(8);
-        outputArea.setEditable(false);
+        // Create TextFlow for clickable output
+        outputFlow = new TextFlow();
+        outputFlow.setPadding(new Insets(5));
+        outputFlow.setMinHeight(190); // Make it fill the scroll pane minus padding
         
-        bottomSection.getChildren().addAll(outputHeader, outputArea);
+        outputScrollPane = new ScrollPane(outputFlow);
+        outputScrollPane.setFitToWidth(true);
+        outputScrollPane.setFitToHeight(true);
+        outputScrollPane.setPrefViewportHeight(200);
+        outputScrollPane.setMinHeight(200);
+        outputScrollPane.setStyle("-fx-background-color: white; -fx-border-color: #cccccc; -fx-border-width: 1px;");
+        
+        bottomSection.getChildren().addAll(outputHeader, outputScrollPane);
         
         // Layout
         setTop(topSection);
@@ -202,7 +237,7 @@ public class RegexEditorPanel extends BorderPane {
     
     private void saveCurrentTemplate() {
         if (currentTemplate == null) {
-            saveAsNewTemplate();
+            createNewTemplate();
             return;
         }
         
@@ -211,28 +246,6 @@ public class RegexEditorPanel extends BorderPane {
         showInfo("Template saved successfully");
     }
     
-    private void saveAsNewTemplate() {
-        TextInputDialog dialog = new TextInputDialog();
-        dialog.setTitle("Save Template");
-        dialog.setHeaderText("Enter template name:");
-        
-        // Configure dialog to be independent and always on top
-        DialogUtil.configureDialog(dialog);
-        dialog.showAndWait().ifPresent(name -> {
-            if (!name.trim().isEmpty()) {
-                RegexTemplate newTemplate = new RegexTemplate(name);
-                updateTemplateData(newTemplate);
-                templates.add(newTemplate);
-                currentTemplate = newTemplate;
-                
-                saveTemplates();
-                refreshTemplateComboBox();
-                templateComboBox.setValue(currentTemplate);
-                
-                showInfo("Template saved as '" + name + "'");
-            }
-        });
-    }
     
     private void deleteTemplate() {
         if (currentTemplate == null) {
@@ -309,6 +322,91 @@ public class RegexEditorPanel extends BorderPane {
         });
     }
     
+    private void createNewTemplate() {
+        TextInputDialog dialog = new TextInputDialog();
+        dialog.setTitle("New Template");
+        dialog.setHeaderText("Enter template name:");
+        
+        // Configure dialog to be independent and always on top
+        DialogUtil.configureDialog(dialog);
+        dialog.showAndWait().ifPresent(name -> {
+            if (!name.trim().isEmpty()) {
+                // Check if name already exists
+                boolean nameExists = templates.stream()
+                    .anyMatch(t -> t.getName().equals(name));
+                
+                if (nameExists) {
+                    showAlert("A template with that name already exists");
+                    return;
+                }
+                
+                RegexTemplate newTemplate = new RegexTemplate(name);
+                templates.add(newTemplate);
+                currentTemplate = newTemplate;
+                
+                // Clear the UI for the new template
+                clearAll();
+                
+                saveTemplates();
+                refreshTemplateComboBox();
+                templateComboBox.setValue(currentTemplate);
+                
+                showInfo("New template '" + name + "' created");
+            }
+        });
+    }
+    
+    private void duplicateTemplate() {
+        if (currentTemplate == null) {
+            showAlert("No template selected to duplicate");
+            return;
+        }
+        
+        TextInputDialog dialog = new TextInputDialog(currentTemplate.getName() + " (Copy)");
+        dialog.setTitle("Duplicate Template");
+        dialog.setHeaderText("Enter name for duplicate template:");
+        
+        // Configure dialog to be independent and always on top
+        DialogUtil.configureDialog(dialog);
+        dialog.showAndWait().ifPresent(name -> {
+            if (!name.trim().isEmpty()) {
+                // Check if name already exists
+                boolean nameExists = templates.stream()
+                    .anyMatch(t -> t.getName().equals(name));
+                
+                if (nameExists) {
+                    showAlert("A template with that name already exists");
+                    return;
+                }
+                
+                // Create a copy of the current template
+                RegexTemplate duplicateTemplate = new RegexTemplate(name);
+                
+                // Copy patterns from current template
+                List<RegexTemplate.PatternData> patternsCopy = new ArrayList<>();
+                for (RegexTemplate.PatternData pd : currentTemplate.getPatterns()) {
+                    patternsCopy.add(new RegexTemplate.PatternData(pd.getName(), pd.getPattern()));
+                }
+                duplicateTemplate.setPatterns(patternsCopy);
+                
+                // Copy template text
+                duplicateTemplate.setTemplateText(currentTemplate.getTemplateText());
+                
+                templates.add(duplicateTemplate);
+                currentTemplate = duplicateTemplate;
+                
+                saveTemplates();
+                refreshTemplateComboBox();
+                templateComboBox.setValue(currentTemplate);
+                
+                // Load the duplicated template
+                loadTemplate(currentTemplate);
+                
+                showInfo("Template duplicated as '" + name + "'");
+            }
+        });
+    }
+    
     private void loadTemplate(RegexTemplate template) {
         currentTemplate = template;
         templateComboBox.setValue(template);
@@ -344,7 +442,7 @@ public class RegexEditorPanel extends BorderPane {
     private void clearAll() {
         patterns.clear();
         templateArea.clear();
-        outputArea.clear();
+        outputFlow.getChildren().clear();
     }
     
     private void refreshTemplateComboBox() {
@@ -638,12 +736,117 @@ public class RegexEditorPanel extends BorderPane {
                 patternMatches.put(entry.getName(), matches);
             }
             
-            // Process template
-            String output = processTemplateScript(template, patternMatches);
-            outputArea.setText(output);
+            // Process template and display with clickable links
+            processTemplateWithLinks(template, patternMatches);
             
         } catch (Exception e) {
             showAlert("Error processing template: " + e.getMessage());
+        }
+    }
+    
+    private void processTemplateWithLinks(String template, Map<String, List<MatchResult>> matches) {
+        outputFlow.getChildren().clear();
+        
+        // First, get all the matches that will be displayed
+        Map<String, Set<String>> displayedMatches = new HashMap<>();
+        for (Map.Entry<String, List<MatchResult>> entry : matches.entrySet()) {
+            Set<String> matchTexts = new HashSet<>();
+            for (MatchResult match : entry.getValue()) {
+                matchTexts.add(match.group());
+            }
+            displayedMatches.put(entry.getKey(), matchTexts);
+        }
+        
+        // Process the template to get the output text
+        String output = processTemplateScript(template, matches);
+        
+        // Split the output into parts and create hyperlinks for matches
+        String[] lines = output.split("\n");
+        for (int lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+            String line = lines[lineIndex];
+            
+            // Check each pattern's matches in this line
+            List<Node> lineNodes = new ArrayList<>();
+            int lastEnd = 0;
+            
+            // Create a list of all matches in this line with their positions
+            List<MatchInfo> matchInfos = new ArrayList<>();
+            
+            for (Map.Entry<String, Set<String>> entry : displayedMatches.entrySet()) {
+                for (String matchText : entry.getValue()) {
+                    if (matchText.isEmpty()) continue;
+                    
+                    int index = 0;
+                    while ((index = line.indexOf(matchText, index)) != -1) {
+                        matchInfos.add(new MatchInfo(index, index + matchText.length(), matchText, entry.getKey()));
+                        index += matchText.length();
+                    }
+                }
+            }
+            
+            // Sort matches by start position
+            matchInfos.sort((a, b) -> Integer.compare(a.start, b.start));
+            
+            // Remove overlapping matches (keep the first one)
+            List<MatchInfo> nonOverlapping = new ArrayList<>();
+            for (MatchInfo match : matchInfos) {
+                if (nonOverlapping.isEmpty() || match.start >= nonOverlapping.get(nonOverlapping.size() - 1).end) {
+                    nonOverlapping.add(match);
+                }
+            }
+            
+            // Create nodes for this line
+            for (MatchInfo match : nonOverlapping) {
+                // Add text before the match
+                if (match.start > lastEnd) {
+                    lineNodes.add(new Text(line.substring(lastEnd, match.start)));
+                }
+                
+                // Create hyperlink for the match
+                Hyperlink link = new Hyperlink(match.text);
+                link.setStyle("-fx-text-fill: #0066cc; -fx-underline: true;");
+                link.setOnAction(e -> {
+                    // Copy to clipboard
+                    ClipboardContent content = new ClipboardContent();
+                    content.putString(match.text);
+                    Clipboard.getSystemClipboard().setContent(content);
+                });
+                
+                // Add tooltip to show which pattern matched
+                Tooltip tooltip = new Tooltip("Pattern: " + match.patternName + "\nClick to copy");
+                Tooltip.install(link, tooltip);
+                
+                lineNodes.add(link);
+                lastEnd = match.end;
+            }
+            
+            // Add remaining text
+            if (lastEnd < line.length()) {
+                lineNodes.add(new Text(line.substring(lastEnd)));
+            }
+            
+            // Add line nodes to output
+            outputFlow.getChildren().addAll(lineNodes);
+            
+            // Add newline if not the last line
+            if (lineIndex < lines.length - 1) {
+                outputFlow.getChildren().add(new Text("\n"));
+            }
+        }
+    }
+    
+    // Helper class to track match information
+    private static class MatchInfo {
+        final int start;
+        final int end;
+        final String text;
+        final String patternName;
+        
+        MatchInfo(int start, int end, String text, String patternName) {
+            this.start = start;
+            this.end = end;
+            this.text = text;
+            this.patternName = patternName;
         }
     }
     
@@ -851,5 +1054,66 @@ public class RegexEditorPanel extends BorderPane {
         
         public String getDescription() { return description.get(); }
         public SimpleStringProperty descriptionProperty() { return description; }
+    }
+    
+    /**
+     * Load UI preferences including column widths
+     */
+    @SuppressWarnings("unchecked")
+    private void loadPreferences() {
+        File file = new File(PREFERENCES_FILE);
+        if (file.exists()) {
+            try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
+                columnWidths = (Map<String, Double>) ois.readObject();
+            } catch (Exception e) {
+                columnWidths = new HashMap<>();
+            }
+        }
+    }
+    
+    /**
+     * Save UI preferences including column widths
+     */
+    private void savePreferences() {
+        try {
+            // Save current column widths
+            for (TableColumn<PatternEntry, ?> column : patternsTable.getColumns()) {
+                if (column.getText() != null && !column.getText().isEmpty()) {
+                    columnWidths.put(column.getText(), column.getWidth());
+                }
+            }
+            
+            // Ensure parent directory exists
+            File file = new File(PREFERENCES_FILE);
+            File parentDir = file.getParentFile();
+            if (parentDir != null && !parentDir.exists()) {
+                parentDir.mkdirs();
+            }
+            
+            try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(PREFERENCES_FILE))) {
+                oos.writeObject(columnWidths);
+            }
+        } catch (Exception e) {
+            // Silently ignore preference save errors
+        }
+    }
+    
+    /**
+     * Apply saved column widths to the table
+     */
+    private void applyColumnWidths() {
+        if (columnWidths == null || columnWidths.isEmpty()) {
+            return;
+        }
+        
+        for (TableColumn<PatternEntry, ?> column : patternsTable.getColumns()) {
+            String columnName = column.getText();
+            if (columnName != null && columnWidths.containsKey(columnName)) {
+                Double width = columnWidths.get(columnName);
+                if (width != null && width > 0) {
+                    column.setPrefWidth(width);
+                }
+            }
+        }
     }
 }

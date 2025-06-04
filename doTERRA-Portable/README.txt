@@ -51,4 +51,4 @@ If the app doesn't start:
 4. Check that antivirus isn't blocking the app
 
 Version: 2.0.0
-Built: 2025-06-02
+Built: 2025-06-03
