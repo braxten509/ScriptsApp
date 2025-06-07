@@ -11,6 +11,8 @@ import javafx.scene.text.Text;
 import javafx.scene.text.TextFlow;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.stage.Stage;
+import javafx.scene.Scene;
 
 import java.util.*;
 import java.util.regex.Matcher;
@@ -40,10 +42,15 @@ public class CalculatorPanel extends BorderPane {
     
     // Regex pattern controls
     private TextField regexField;
-    private ComboBox<String> savedRegexCombo;
+    private ComboBox<NamedPattern> savedRegexCombo;
     private ComboBox<String> operationCombo;
-    private ObservableList<String> savedRegexPatterns;
+    private ObservableList<NamedPattern> savedRegexPatterns;
     private static final String REGEX_FILE = "data/calculator_regex_patterns.dat";
+    private boolean useCustomRegex = false;
+    private Pattern customPattern = null;
+    
+    // Pop-out window reference
+    private Stage popOutStage = null;
     
     private static class NumberNode {
         String value;
@@ -57,6 +64,63 @@ public class CalculatorPanel extends BorderPane {
             this.startPos = startPos;
             this.endPos = endPos;
             this.isHighlighted = false;
+        }
+    }
+    
+    private static class NamedPattern implements Serializable {
+        private static final long serialVersionUID = 1L;
+        private String name;
+        private String pattern;
+        private boolean isDefault;
+        
+        public NamedPattern(String name, String pattern) {
+            this.name = name;
+            this.pattern = pattern;
+            this.isDefault = false;
+        }
+        
+        public NamedPattern(String name, String pattern, boolean isDefault) {
+            this.name = name;
+            this.pattern = pattern;
+            this.isDefault = isDefault;
+        }
+        
+        public String getName() {
+            return name;
+        }
+        
+        public void setName(String name) {
+            this.name = name;
+        }
+        
+        public String getPattern() {
+            return pattern;
+        }
+        
+        public boolean isDefault() {
+            return isDefault;
+        }
+        
+        public void setDefault(boolean isDefault) {
+            this.isDefault = isDefault;
+        }
+        
+        @Override
+        public String toString() {
+            return isDefault ? name + " (Default)" : name;
+        }
+        
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) return true;
+            if (obj == null || getClass() != obj.getClass()) return false;
+            NamedPattern that = (NamedPattern) obj;
+            return pattern.equals(that.pattern);
+        }
+        
+        @Override
+        public int hashCode() {
+            return pattern.hashCode();
         }
     }
     
@@ -111,6 +175,9 @@ public class CalculatorPanel extends BorderPane {
         
         // Load saved regex patterns
         loadRegexPatterns();
+        
+        // Load default pattern if set
+        loadDefaultPattern();
     }
     
     private VBox createTopSection() {
@@ -118,8 +185,19 @@ public class CalculatorPanel extends BorderPane {
         topSection.setPadding(new Insets(10));
         topSection.setStyle("-fx-background-color: white; -fx-border-color: #9C27B0; -fx-border-width: 2; -fx-border-radius: 5; -fx-background-radius: 5;");
         
+        HBox labelWithButtons = new HBox(10);
+        labelWithButtons.setAlignment(Pos.CENTER_LEFT);
+        
         Label inputLabel = new Label("Paste your text here:");
         inputLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
+        
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        
+        Button clearBtn = createStyledButton("Clear", "#f44336", e -> inputArea.clear());
+        Button popOutBtn = createStyledButton("Pop Out", "#2196F3", e -> showInputPopOut());
+        
+        labelWithButtons.getChildren().addAll(inputLabel, spacer, clearBtn, popOutBtn);
         
         inputArea = new TextArea();
         inputArea.setPrefRowCount(3);
@@ -127,7 +205,7 @@ public class CalculatorPanel extends BorderPane {
         inputArea.setStyle("-fx-border-color: #cccccc; -fx-border-width: 1; -fx-border-radius: 3;");
         inputArea.textProperty().addListener((obs, old, text) -> processText(text));
         
-        topSection.getChildren().addAll(inputLabel, inputArea);
+        topSection.getChildren().addAll(labelWithButtons, inputArea);
         return topSection;
     }
     
@@ -166,25 +244,34 @@ public class CalculatorPanel extends BorderPane {
         regexField.setPromptText("Enter regex pattern (e.g., \\d{3}\\.\\d{2})");
         regexField.setPrefWidth(250);
         
+        // Add real-time regex validation
+        regexField.textProperty().addListener((obs, old, text) -> validateRegexPattern(text));
+        
         savedRegexCombo = new ComboBox<>(savedRegexPatterns);
         savedRegexCombo.setPromptText("Saved patterns");
-        savedRegexCombo.setPrefWidth(150);
+        savedRegexCombo.setPrefWidth(200);
         savedRegexCombo.setOnAction(e -> {
-            String selected = savedRegexCombo.getValue();
+            NamedPattern selected = savedRegexCombo.getValue();
             if (selected != null) {
-                regexField.setText(selected);
+                regexField.setText(selected.getPattern());
             }
         });
         
-        Button saveRegexBtn = new Button("Save");
-        saveRegexBtn.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white;");
-        saveRegexBtn.setOnAction(e -> saveRegexPattern());
+        regexControls.getChildren().addAll(regexField, savedRegexCombo);
         
-        Button deleteRegexBtn = new Button("Delete");
-        deleteRegexBtn.setStyle("-fx-background-color: #f44336; -fx-text-fill: white;");
-        deleteRegexBtn.setOnAction(e -> deleteRegexPattern());
+        // Pattern management buttons
+        HBox patternButtons = new HBox(5);
+        patternButtons.setAlignment(Pos.CENTER_LEFT);
         
-        regexControls.getChildren().addAll(regexField, savedRegexCombo, saveRegexBtn, deleteRegexBtn);
+        Button newBtn = createStyledButton("New", "#2196F3", e -> newRegexPattern());
+        Button clearBtn = createStyledButton("Clear", "#795548", e -> clearRegexPattern());
+        Button saveBtn = createStyledButton("Save", "#4CAF50", e -> saveRegexPattern());
+        Button duplicateBtn = createStyledButton("Duplicate", "#FF9800", e -> duplicateRegexPattern());
+        Button renameBtn = createStyledButton("Rename", "#9C27B0", e -> renameRegexPattern());
+        Button setDefaultBtn = createStyledButton("Set Default", "#607D8B", e -> setDefaultRegexPattern());
+        Button deleteBtn = createStyledButton("Delete", "#f44336", e -> deleteRegexPattern());
+        
+        patternButtons.getChildren().addAll(newBtn, clearBtn, saveBtn, duplicateBtn, renameBtn, setDefaultBtn, deleteBtn);
         
         HBox operationControls = new HBox(10);
         operationControls.setAlignment(Pos.CENTER_LEFT);
@@ -196,17 +283,14 @@ public class CalculatorPanel extends BorderPane {
         operationCombo.setValue("Add All (+)");
         operationCombo.setPrefWidth(150);
         
-        Button applyRegexBtn = new Button("Find & Apply");
-        applyRegexBtn.setStyle("-fx-background-color: #2196F3; -fx-text-fill: white; -fx-font-weight: bold;");
-        applyRegexBtn.setOnAction(e -> applyRegexOperation());
+        Button applyRegexBtn = createStyledButton("Find & Apply", "#2196F3", e -> applyRegexOperation());
+        applyRegexBtn.setStyle(applyRegexBtn.getStyle() + "; -fx-font-weight: bold;");
         
-        Button highlightOnlyBtn = new Button("Highlight Only");
-        highlightOnlyBtn.setStyle("-fx-background-color: #FF9800; -fx-text-fill: white;");
-        highlightOnlyBtn.setOnAction(e -> highlightRegexMatches());
+        Button highlightOnlyBtn = createStyledButton("Highlight Only", "#FF9800", e -> highlightRegexMatches());
         
         operationControls.getChildren().addAll(operationLabel, operationCombo, applyRegexBtn, highlightOnlyBtn);
         
-        regexSection.getChildren().addAll(regexLabel, regexControls, operationControls);
+        regexSection.getChildren().addAll(regexLabel, regexControls, patternButtons, operationControls);
         return regexSection;
     }
     
@@ -239,18 +323,15 @@ public class CalculatorPanel extends BorderPane {
         HBox controlBox = new HBox(10);
         controlBox.setAlignment(Pos.CENTER);
         
-        Button eraseBtn = new Button("Erase Last");
-        eraseBtn.setStyle("-fx-background-color: #ff6b6b; -fx-text-fill: white; -fx-font-weight: bold;");
-        eraseBtn.setOnAction(e -> eraseLastSelection());
+        Button eraseBtn = createStyledButton("Erase Last", "#ff6b6b", e -> eraseLastSelection());
+        eraseBtn.setStyle(eraseBtn.getStyle() + "; -fx-font-weight: bold;");
         
-        Button clearBtn = new Button("Clear All");
-        clearBtn.setStyle("-fx-background-color: #ff4444; -fx-text-fill: white; -fx-font-weight: bold;");
-        clearBtn.setOnAction(e -> clearAll());
+        Button clearBtn = createStyledButton("Clear All", "#ff4444", e -> clearAll());
+        clearBtn.setStyle(clearBtn.getStyle() + "; -fx-font-weight: bold;");
         
-        Button calculateBtn = new Button("Calculate");
-        calculateBtn.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 16px;");
+        Button calculateBtn = createStyledButton("Calculate", "#4CAF50", e -> calculate());
+        calculateBtn.setStyle(calculateBtn.getStyle() + "; -fx-font-weight: bold; -fx-font-size: 16px;");
         calculateBtn.setPrefWidth(150);
-        calculateBtn.setOnAction(e -> calculate());
         
         controlBox.getChildren().addAll(eraseBtn, clearBtn, calculateBtn);
         
@@ -272,9 +353,7 @@ public class CalculatorPanel extends BorderPane {
         resultField.setPrefWidth(200);
         resultField.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-background-color: #e8f5e9; -fx-border-color: #4CAF50; -fx-border-width: 1; -fx-border-radius: 3;");
         
-        Button copyBtn = new Button("Copy");
-        copyBtn.setStyle("-fx-background-color: #2196F3; -fx-text-fill: white;");
-        copyBtn.setOnAction(e -> copyResult());
+        Button copyBtn = createStyledButton("Copy", "#2196F3", e -> copyResult());
         
         resultSection.getChildren().addAll(resultLabel, resultField, copyBtn);
         return resultSection;
@@ -301,35 +380,93 @@ public class CalculatorPanel extends BorderPane {
         clearAll();
         lastProcessedText = text;
         
-        Pattern pattern = Pattern.compile("-?\\d+\\.?\\d*");
+        // Use custom regex if available and valid, otherwise use default number pattern
+        Pattern pattern;
+        boolean usingGroups = false;
+        
+        if (useCustomRegex && customPattern != null) {
+            pattern = customPattern;
+            // Check if pattern has capturing groups
+            usingGroups = pattern.pattern().contains("(") && !pattern.pattern().contains("\\(");
+        } else {
+            pattern = Pattern.compile("-?\\d+\\.?\\d*");
+        }
+        
         Matcher matcher = pattern.matcher(text);
         
         int lastEnd = 0;
         while (matcher.find()) {
-            // Add non-number text as gray
+            // Add non-matching text as gray
             if (matcher.start() > lastEnd) {
                 Text grayText = new Text(text.substring(lastEnd, matcher.start()));
                 grayText.setFill(Color.GRAY);
                 displayFlow.getChildren().add(grayText);
             }
             
-            // Create number node
-            String number = matcher.group();
-            NumberNode node = new NumberNode(number, matcher.start(), matcher.end());
+            // Get the matched value
+            String matchedValue;
+            int matchStart, matchEnd;
             
-            Text numberText = new Text(number);
-            numberText.setFill(Color.BLACK);
-            numberText.setStyle("-fx-font-weight: bold; -fx-cursor: hand;");
-            node.textNode = numberText;
+            if (usingGroups && matcher.groupCount() > 0) {
+                try {
+                    // Use the first capturing group if available
+                    matchedValue = matcher.group(1);
+                    matchStart = matcher.start(1);
+                    matchEnd = matcher.end(1);
+                } catch (Exception e) {
+                    // If capture group is null or invalid, skip this match
+                    lastEnd = matcher.end();
+                    continue;
+                }
+                
+                // Add text before the captured group as gray
+                if (matcher.start() < matchStart) {
+                    Text preGroupText = new Text(text.substring(matcher.start(), matchStart));
+                    preGroupText.setFill(Color.GRAY);
+                    displayFlow.getChildren().add(preGroupText);
+                }
+            } else {
+                // Use the entire match
+                matchedValue = matcher.group();
+                matchStart = matcher.start();
+                matchEnd = matcher.end();
+            }
             
-            numberText.setOnMouseClicked(e -> selectNumber(node));
+            // Validate that the matched value is numeric
+            if (isNumeric(matchedValue)) {
+                // Create number node
+                NumberNode node = new NumberNode(matchedValue, matchStart, matchEnd);
+                
+                Text numberText = new Text(matchedValue);
+                numberText.setFill(Color.BLACK);
+                numberText.setStyle("-fx-font-weight: bold; -fx-cursor: hand;");
+                node.textNode = numberText;
+                
+                numberText.setOnMouseClicked(e -> selectNumber(node));
+                
+                // Add tooltip
+                Tooltip tooltip = new Tooltip("Click to add to equation");
+                Tooltip.install(numberText, tooltip);
+                
+                allNumbers.add(node);
+                displayFlow.getChildren().add(numberText);
+            } else {
+                // Show non-numeric captures in red
+                Text errorText = new Text(matchedValue);
+                errorText.setFill(Color.RED);
+                errorText.setStyle("-fx-font-weight: bold;");
+                Tooltip errorTooltip = new Tooltip("Not a valid number: " + matchedValue);
+                Tooltip.install(errorText, errorTooltip);
+                displayFlow.getChildren().add(errorText);
+            }
             
-            // Add tooltip
-            Tooltip tooltip = new Tooltip("Click to add to equation");
-            Tooltip.install(numberText, tooltip);
+            // Add text after the captured group but before match end
+            if (usingGroups && matcher.groupCount() > 0 && matchEnd < matcher.end()) {
+                Text postGroupText = new Text(text.substring(matchEnd, matcher.end()));
+                postGroupText.setFill(Color.GRAY);
+                displayFlow.getChildren().add(postGroupText);
+            }
             
-            allNumbers.add(node);
-            displayFlow.getChildren().add(numberText);
             lastEnd = matcher.end();
         }
         
@@ -344,7 +481,13 @@ public class CalculatorPanel extends BorderPane {
     private boolean shouldPreserveSelections(String newText) {
         if (lastProcessedText.isEmpty()) return false;
         
-        // Extract all numbers from both texts
+        // For custom regex, we can't easily determine if selections should be preserved
+        // so we'll always reprocess when using custom regex
+        if (useCustomRegex && customPattern != null) {
+            return false;
+        }
+        
+        // Extract all numbers from both texts using default pattern
         Pattern pattern = Pattern.compile("-?\\d+\\.?\\d*");
         List<String> oldNumbers = new ArrayList<>();
         List<String> newNumbers = new ArrayList<>();
@@ -419,7 +562,9 @@ public class CalculatorPanel extends BorderPane {
     
     private void selectNumber(NumberNode node) {
         if (node.isHighlighted) {
-            return; // Already selected
+            // Deselect the number
+            deselectNumber(node);
+            return;
         }
         
         Color color = HIGHLIGHT_COLORS[colorIndex % HIGHLIGHT_COLORS.length];
@@ -457,91 +602,180 @@ public class CalculatorPanel extends BorderPane {
         colorIndex++;
     }
     
+    private void deselectNumber(NumberNode node) {
+        // Find the selection for this node
+        int nodeIndex = allNumbers.indexOf(node);
+        String key = node.value + "_" + nodeIndex;
+        NumberSelection selection = selectionMap.get(key);
+        
+        if (selection != null) {
+            // Reset node appearance
+            node.textNode.setFill(Color.BLACK);
+            node.textNode.setStyle("-fx-font-weight: bold; -fx-cursor: hand;");
+            node.isHighlighted = false;
+            
+            // Remove index label
+            if (selection.indexLabel != null) {
+                displayFlow.getChildren().remove(selection.indexLabel);
+            }
+            
+            // Remove from selections
+            selections.remove(selection);
+            selectionMap.remove(key);
+            
+            // Remove from equation
+            removeFromEquation(selection);
+            
+            // Reindex remaining selections
+            reindexSelections();
+        }
+    }
+    
+    private void removeFromEquation(NumberSelection selection) {
+        String equation = equationField.getText();
+        String value = selection.value;
+        
+        // Try to find and remove the value with its operator
+        String[] patterns = {
+            " \\+ " + Pattern.quote(value) + " \\+ ",  // middle of equation
+            " \\* " + Pattern.quote(value) + " \\* ",  // middle of equation
+            " - " + Pattern.quote(value) + " - ",      // middle of equation
+            " / " + Pattern.quote(value) + " / ",      // middle of equation
+            " \\+ " + Pattern.quote(value) + "$",      // end with +
+            " \\* " + Pattern.quote(value) + "$",      // end with *
+            " - " + Pattern.quote(value) + "$",        // end with -
+            " / " + Pattern.quote(value) + "$",        // end with /
+            "^" + Pattern.quote(value) + " \\+ ",      // beginning with +
+            "^" + Pattern.quote(value) + " \\* ",      // beginning with *
+            "^" + Pattern.quote(value) + " - ",        // beginning with -
+            "^" + Pattern.quote(value) + " / ",        // beginning with /
+            "^" + Pattern.quote(value) + "$"           // only value
+        };
+        
+        String[] replacements = {
+            " + ", " * ", " - ", " / ",  // for middle patterns
+            "", "", "", "",              // for end patterns
+            "", "", "", "",              // for beginning patterns
+            ""                           // for only value
+        };
+        
+        for (int i = 0; i < patterns.length; i++) {
+            String newEquation = equation.replaceFirst(patterns[i], replacements[i]);
+            if (!newEquation.equals(equation)) {
+                equationField.setText(newEquation.trim());
+                return;
+            }
+        }
+    }
+    
+    private void reindexSelections() {
+        // Sort selections by their current position in the display
+        List<NumberSelection> sortedSelections = new ArrayList<>(selections);
+        sortedSelections.sort((a, b) -> {
+            int posA = displayFlow.getChildren().indexOf(a.node.textNode);
+            int posB = displayFlow.getChildren().indexOf(b.node.textNode);
+            return Integer.compare(posA, posB);
+        });
+        
+        // Update indices
+        for (int i = 0; i < sortedSelections.size(); i++) {
+            NumberSelection sel = sortedSelections.get(i);
+            sel.index = i + 1;
+            if (sel.indexLabel != null) {
+                sel.indexLabel.setText(" [" + sel.index + "] ");
+            }
+        }
+        
+        // Reset currentIndex for next selection
+        currentIndex = sortedSelections.size() + 1;
+    }
+    
     private void highlightRegexMatches() {
+        // First ensure we have a valid custom pattern
         String pattern = regexField.getText().trim();
         if (pattern.isEmpty()) {
             showAlert("No Pattern", "Please enter a regex pattern.");
             return;
         }
         
+        if (!useCustomRegex || customPattern == null) {
+            showAlert("Invalid Pattern", "The regex pattern is invalid. Please fix it first.");
+            return;
+        }
+        
+        // Clear current selections and trigger re-processing
         clearAll();
         
-        try {
-            Pattern regex = Pattern.compile(pattern);
-            for (NumberNode node : allNumbers) {
-                if (regex.matcher(node.value).matches()) {
-                    selectNumber(node);
-                }
-            }
-        } catch (Exception e) {
-            showAlert("Invalid Regex", "Invalid regex pattern: " + e.getMessage());
+        // The numbers are already filtered by the custom regex in processText
+        // Just select all numeric values found
+        for (NumberNode node : allNumbers) {
+            selectNumber(node);
+        }
+        
+        if (allNumbers.isEmpty()) {
+            showAlert("No Matches", "No numeric values match the pattern.");
         }
     }
     
     private void applyRegexOperation() {
+        // First ensure we have a valid custom pattern
         String pattern = regexField.getText().trim();
         if (pattern.isEmpty()) {
             showAlert("No Pattern", "Please enter a regex pattern.");
             return;
         }
         
+        if (!useCustomRegex || customPattern == null) {
+            showAlert("Invalid Pattern", "The regex pattern is invalid. Please fix it first.");
+            return;
+        }
+        
         clearAll();
         
-        try {
-            Pattern regex = Pattern.compile(pattern);
-            List<NumberNode> matches = new ArrayList<>();
-            
-            for (NumberNode node : allNumbers) {
-                if (regex.matcher(node.value).matches()) {
-                    matches.add(node);
+        // The numbers are already filtered by the custom regex in processText
+        List<NumberNode> matches = new ArrayList<>(allNumbers);
+        
+        if (matches.isEmpty()) {
+            showAlert("No Matches", "No numeric values match the pattern.");
+            return;
+        }
+        
+        String operation = operationCombo.getValue();
+        if (operation == null) operation = "Add All (+)";
+        
+        switch (operation) {
+            case "Add All (+)":
+                for (int i = 0; i < matches.size(); i++) {
+                    selectNumber(matches.get(i));
+                    if (i < matches.size() - 1) {
+                        equationField.setText(equationField.getText() + " + ");
+                    }
                 }
-            }
-            
-            if (matches.isEmpty()) {
-                showAlert("No Matches", "No numbers match the pattern.");
-                return;
-            }
-            
-            String operation = operationCombo.getValue();
-            if (operation == null) operation = "Add All (+)";
-            
-            switch (operation) {
-                case "Add All (+)":
-                    for (int i = 0; i < matches.size(); i++) {
-                        selectNumber(matches.get(i));
-                        if (i < matches.size() - 1) {
-                            equationField.setText(equationField.getText() + " + ");
-                        }
+                break;
+                
+            case "Multiply All (×)":
+                for (int i = 0; i < matches.size(); i++) {
+                    selectNumber(matches.get(i));
+                    if (i < matches.size() - 1) {
+                        equationField.setText(equationField.getText() + " * ");
                     }
-                    break;
-                    
-                case "Multiply All (×)":
-                    for (int i = 0; i < matches.size(); i++) {
-                        selectNumber(matches.get(i));
-                        if (i < matches.size() - 1) {
-                            equationField.setText(equationField.getText() + " * ");
-                        }
+                }
+                break;
+                
+            case "Add Sequentially":
+                equationField.setText("(");
+                for (int i = 0; i < matches.size(); i++) {
+                    selectNumber(matches.get(i));
+                    if (i < matches.size() - 1) {
+                        equationField.setText(equationField.getText() + " + ");
                     }
-                    break;
-                    
-                case "Add Sequentially":
-                    equationField.setText("(");
-                    for (int i = 0; i < matches.size(); i++) {
-                        selectNumber(matches.get(i));
-                        if (i < matches.size() - 1) {
-                            equationField.setText(equationField.getText() + " + ");
-                        }
-                    }
-                    equationField.setText(equationField.getText() + ")");
-                    break;
-                    
-                case "Custom Expression":
-                    showCustomExpressionDialog(matches);
-                    break;
-            }
-            
-        } catch (Exception e) {
-            showAlert("Invalid Regex", "Invalid regex pattern: " + e.getMessage());
+                }
+                equationField.setText(equationField.getText() + ")");
+                break;
+                
+            case "Custom Expression":
+                showCustomExpressionDialog(matches);
+                break;
         }
     }
     
@@ -572,22 +806,49 @@ public class CalculatorPanel extends BorderPane {
             return;
         }
         
-        if (!savedRegexPatterns.contains(pattern)) {
-            savedRegexPatterns.add(pattern);
+        // Check if pattern already exists
+        for (NamedPattern np : savedRegexPatterns) {
+            if (np.getPattern().equals(pattern)) {
+                showAlert("Exists", "This pattern already exists as '" + np.getName() + "'.");
+                return;
+            }
+        }
+        
+        // Ask for a name for the pattern
+        TextInputDialog dialog = new TextInputDialog();
+        dialog.setTitle("Save Regex Pattern");
+        dialog.setHeaderText("Name your regex pattern");
+        dialog.setContentText("Pattern name:");
+        
+        Optional<String> result = dialog.showAndWait();
+        if (result.isPresent()) {
+            String name = result.get().trim();
+            if (name.isEmpty()) {
+                showAlert("Invalid Name", "Please enter a valid name for the pattern.");
+                return;
+            }
+            
+            // Check if name already exists
+            for (NamedPattern np : savedRegexPatterns) {
+                if (np.getName().equals(name)) {
+                    showAlert("Name Exists", "A pattern with this name already exists.");
+                    return;
+                }
+            }
+            
+            savedRegexPatterns.add(new NamedPattern(name, pattern));
             saveRegexPatternsToDisk();
-            showAlert("Saved", "Pattern saved successfully!");
-        } else {
-            showAlert("Exists", "This pattern already exists.");
+            showAlert("Saved", "Pattern '" + name + "' saved successfully!");
         }
     }
     
     private void deleteRegexPattern() {
-        String selected = savedRegexCombo.getValue();
+        NamedPattern selected = savedRegexCombo.getValue();
         if (selected != null) {
             savedRegexPatterns.remove(selected);
             savedRegexCombo.setValue(null);
             saveRegexPatternsToDisk();
-            showAlert("Deleted", "Pattern deleted successfully!");
+            showAlert("Deleted", "Pattern '" + selected.getName() + "' deleted successfully!");
         }
     }
     
@@ -601,7 +862,7 @@ public class CalculatorPanel extends BorderPane {
             }
             
             try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(REGEX_FILE))) {
-                oos.writeObject(new ArrayList<>(savedRegexPatterns));
+                oos.writeObject(new ArrayList<NamedPattern>(savedRegexPatterns));
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -612,8 +873,25 @@ public class CalculatorPanel extends BorderPane {
         File file = new File(REGEX_FILE);
         if (file.exists()) {
             try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(file))) {
-                List<String> patterns = (List<String>) ois.readObject();
-                savedRegexPatterns.addAll(patterns);
+                Object obj = ois.readObject();
+                if (obj instanceof List) {
+                    List<?> list = (List<?>) obj;
+                    if (!list.isEmpty()) {
+                        Object first = list.get(0);
+                        if (first instanceof String) {
+                            // Old format - convert to new format
+                            List<String> oldPatterns = (List<String>) obj;
+                            for (int i = 0; i < oldPatterns.size(); i++) {
+                                boolean isDefault = i == 0; // Make first pattern default
+                                savedRegexPatterns.add(new NamedPattern("Pattern " + (i + 1), oldPatterns.get(i), isDefault));
+                            }
+                        } else if (first instanceof NamedPattern) {
+                            // New format
+                            List<NamedPattern> patterns = (List<NamedPattern>) obj;
+                            savedRegexPatterns.addAll(patterns);
+                        }
+                    }
+                }
             } catch (IOException | ClassNotFoundException e) {
                 e.printStackTrace();
             }
@@ -626,11 +904,31 @@ public class CalculatorPanel extends BorderPane {
         btn.setPrefHeight(35);
         operatorButtons.put(actual, btn);
         
+        String baseStyle = "-fx-font-size: 16px; -fx-font-weight: bold;";
+        String selectedStyle = baseStyle + " -fx-border-color: #FF9800; -fx-border-width: 3; -fx-border-radius: 5;";
+        
         if (isDefault) {
-            btn.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-border-color: #FF9800; -fx-border-width: 3; -fx-border-radius: 5;");
+            btn.setStyle(selectedStyle);
         } else {
-            btn.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+            btn.setStyle(baseStyle);
         }
+        
+        // Add hover effects
+        btn.setOnMouseEntered(e -> {
+            if (btn.getStyle().contains("#FF9800")) {
+                btn.setStyle(selectedStyle + " -fx-background-color: #FFE0B2;");
+            } else {
+                btn.setStyle(baseStyle + " -fx-background-color: #e3f2fd;");
+            }
+        });
+        
+        btn.setOnMouseExited(e -> {
+            if (btn.getStyle().contains("#FF9800")) {
+                btn.setStyle(selectedStyle);
+            } else {
+                btn.setStyle(baseStyle);
+            }
+        });
         
         btn.setOnAction(e -> {
             // Update current operator
@@ -639,9 +937,9 @@ public class CalculatorPanel extends BorderPane {
             // Update button styles
             operatorButtons.forEach((op, button) -> {
                 if (op.equals(actual)) {
-                    button.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-border-color: #FF9800; -fx-border-width: 3; -fx-border-radius: 5;");
+                    button.setStyle(selectedStyle);
                 } else if (!op.equals("(") && !op.equals(")")) {
-                    button.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+                    button.setStyle(baseStyle);
                 }
             });
             
@@ -657,11 +955,54 @@ public class CalculatorPanel extends BorderPane {
         Button btn = new Button(operator);
         btn.setPrefWidth(50);
         btn.setPrefHeight(35);
-        btn.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        String baseStyle = "-fx-font-size: 16px; -fx-font-weight: bold; -fx-background-color: #e0e0e0;";
+        btn.setStyle(baseStyle);
+        
+        // Add hover effects
+        btn.setOnMouseEntered(e -> btn.setStyle(baseStyle + " -fx-background-color: #bdbdbd;"));
+        btn.setOnMouseExited(e -> btn.setStyle(baseStyle));
+        
         btn.setOnAction(e -> {
             equationField.setText(equationField.getText() + operator);
         });
         return btn;
+    }
+    
+    private Button createStyledButton(String text, String baseColor, javafx.event.EventHandler<javafx.event.ActionEvent> action) {
+        Button btn = new Button(text);
+        String baseStyle = "-fx-background-color: " + baseColor + "; -fx-text-fill: white; -fx-font-size: 11px; -fx-padding: 5 10; -fx-border-radius: 3; -fx-background-radius: 3;";
+        btn.setStyle(baseStyle);
+        
+        // Create hover color (lighter version of base color)
+        String hoverColor = lightenColor(baseColor);
+        String hoverStyle = "-fx-background-color: " + hoverColor + "; -fx-text-fill: white; -fx-font-size: 11px; -fx-padding: 5 10; -fx-border-radius: 3; -fx-background-radius: 3;";
+        
+        // Add hover effects
+        btn.setOnMouseEntered(e -> btn.setStyle(hoverStyle));
+        btn.setOnMouseExited(e -> btn.setStyle(baseStyle));
+        
+        btn.setOnAction(action);
+        return btn;
+    }
+    
+    private String lightenColor(String hexColor) {
+        // Simple color lightening - increase each RGB component
+        if (!hexColor.startsWith("#")) return hexColor;
+        
+        try {
+            int r = Integer.valueOf(hexColor.substring(1, 3), 16);
+            int g = Integer.valueOf(hexColor.substring(3, 5), 16);
+            int b = Integer.valueOf(hexColor.substring(5, 7), 16);
+            
+            // Lighten by adding 30 to each component (max 255)
+            r = Math.min(255, r + 30);
+            g = Math.min(255, g + 30);
+            b = Math.min(255, b + 30);
+            
+            return String.format("#%02X%02X%02X", r, g, b);
+        } catch (Exception e) {
+            return hexColor; // Return original if parsing fails
+        }
     }
     
     private void eraseLastSelection() {
@@ -852,5 +1193,212 @@ public class CalculatorPanel extends BorderPane {
             (int)(color.getRed() * 255),
             (int)(color.getGreen() * 255),
             (int)(color.getBlue() * 255));
+    }
+    
+    private boolean isNumeric(String str) {
+        if (str == null || str.isEmpty()) {
+            return false;
+        }
+        try {
+            Double.parseDouble(str);
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+    
+    private void validateRegexPattern(String pattern) {
+        if (pattern == null || pattern.isEmpty()) {
+            regexField.setStyle("-fx-border-color: #cccccc; -fx-border-width: 1; -fx-border-radius: 3;");
+            useCustomRegex = false;
+            customPattern = null;
+            // Reprocess text with default pattern
+            processText(inputArea.getText());
+            return;
+        }
+        
+        try {
+            Pattern testPattern = Pattern.compile(pattern);
+            // Valid regex - set green border
+            regexField.setStyle("-fx-border-color: #4CAF50; -fx-border-width: 2; -fx-border-radius: 3; -fx-background-color: #E8F5E9;");
+            customPattern = testPattern;
+            useCustomRegex = true;
+            // Reprocess text with new pattern
+            processText(inputArea.getText());
+        } catch (Exception e) {
+            // Invalid regex - set red border
+            regexField.setStyle("-fx-border-color: #f44336; -fx-border-width: 2; -fx-border-radius: 3; -fx-background-color: #FFEBEE;");
+            useCustomRegex = false;
+            customPattern = null;
+            // Keep using default pattern
+            processText(inputArea.getText());
+        }
+    }
+    
+    private void showInputPopOut() {
+        // If window already exists and is showing, bring it to front
+        if (popOutStage != null && popOutStage.isShowing()) {
+            popOutStage.toFront();
+            popOutStage.requestFocus();
+            return;
+        }
+        
+        popOutStage = new Stage();
+        popOutStage.setTitle("Calculator Input - Pop Out");
+        popOutStage.setAlwaysOnTop(true); // Keep window on top
+        
+        VBox root = new VBox(10);
+        root.setPadding(new Insets(10));
+        
+        Label label = new Label("Enter or paste your text:");
+        label.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
+        
+        TextArea popOutTextArea = new TextArea();
+        popOutTextArea.setText(inputArea.getText());
+        popOutTextArea.setPrefRowCount(20);
+        popOutTextArea.setPrefColumnCount(50);
+        popOutTextArea.setWrapText(true);
+        popOutTextArea.setStyle("-fx-font-family: monospace;");
+        
+        HBox buttonBox = new HBox(10);
+        buttonBox.setAlignment(Pos.CENTER_RIGHT);
+        
+        Button applyBtn = createStyledButton("Apply", "#4CAF50", e -> {
+            inputArea.setText(popOutTextArea.getText());
+            popOutStage.close();
+            popOutStage = null;
+        });
+        
+        Button cancelBtn = createStyledButton("Cancel", "#757575", e -> {
+            popOutStage.close();
+            popOutStage = null;
+        });
+        
+        buttonBox.getChildren().addAll(cancelBtn, applyBtn);
+        
+        root.getChildren().addAll(label, popOutTextArea, buttonBox);
+        
+        Scene scene = new Scene(root, 600, 400);
+        popOutStage.setScene(scene);
+        
+        // Handle window close button
+        popOutStage.setOnCloseRequest(e -> popOutStage = null);
+        
+        popOutStage.show();
+    }
+    
+    private void newRegexPattern() {
+        regexField.clear();
+        savedRegexCombo.setValue(null);
+    }
+    
+    private void clearRegexPattern() {
+        regexField.clear();
+    }
+    
+    private void duplicateRegexPattern() {
+        NamedPattern selected = savedRegexCombo.getValue();
+        if (selected == null) {
+            showAlert("No Selection", "Please select a pattern to duplicate.");
+            return;
+        }
+        
+        // Ask for a name for the duplicated pattern
+        TextInputDialog dialog = new TextInputDialog(selected.getName() + " Copy");
+        dialog.setTitle("Duplicate Regex Pattern");
+        dialog.setHeaderText("Name for the duplicated pattern");
+        dialog.setContentText("Pattern name:");
+        
+        Optional<String> result = dialog.showAndWait();
+        if (result.isPresent()) {
+            String name = result.get().trim();
+            if (name.isEmpty()) {
+                showAlert("Invalid Name", "Please enter a valid name for the pattern.");
+                return;
+            }
+            
+            // Check if name already exists
+            for (NamedPattern np : savedRegexPatterns) {
+                if (np.getName().equals(name)) {
+                    showAlert("Name Exists", "A pattern with this name already exists.");
+                    return;
+                }
+            }
+            
+            savedRegexPatterns.add(new NamedPattern(name, selected.getPattern()));
+            saveRegexPatternsToDisk();
+            showAlert("Duplicated", "Pattern '" + name + "' created successfully!");
+        }
+    }
+    
+    private void renameRegexPattern() {
+        NamedPattern selected = savedRegexCombo.getValue();
+        if (selected == null) {
+            showAlert("No Selection", "Please select a pattern to rename.");
+            return;
+        }
+        
+        // Ask for new name
+        TextInputDialog dialog = new TextInputDialog(selected.getName());
+        dialog.setTitle("Rename Regex Pattern");
+        dialog.setHeaderText("Enter new name for the pattern");
+        dialog.setContentText("Pattern name:");
+        
+        Optional<String> result = dialog.showAndWait();
+        if (result.isPresent()) {
+            String newName = result.get().trim();
+            if (newName.isEmpty()) {
+                showAlert("Invalid Name", "Please enter a valid name for the pattern.");
+                return;
+            }
+            
+            // Check if name already exists (excluding current pattern)
+            for (NamedPattern np : savedRegexPatterns) {
+                if (np != selected && np.getName().equals(newName)) {
+                    showAlert("Name Exists", "A pattern with this name already exists.");
+                    return;
+                }
+            }
+            
+            selected.setName(newName);
+            saveRegexPatternsToDisk();
+            savedRegexCombo.getSelectionModel().clearSelection();
+            savedRegexCombo.setValue(selected);
+            showAlert("Renamed", "Pattern renamed to '" + newName + "' successfully!");
+        }
+    }
+    
+    private void setDefaultRegexPattern() {
+        NamedPattern selected = savedRegexCombo.getValue();
+        if (selected == null) {
+            showAlert("No Selection", "Please select a pattern to set as default.");
+            return;
+        }
+        
+        // Clear existing default
+        for (NamedPattern np : savedRegexPatterns) {
+            np.setDefault(false);
+        }
+        
+        // Set new default
+        selected.setDefault(true);
+        saveRegexPatternsToDisk();
+        
+        // Refresh the combo box to show the updated display
+        savedRegexCombo.getSelectionModel().clearSelection();
+        savedRegexCombo.setValue(selected);
+        
+        showAlert("Default Set", "'" + selected.getName() + "' is now the default pattern.");
+    }
+    
+    private void loadDefaultPattern() {
+        // Load default pattern on startup if available
+        for (NamedPattern pattern : savedRegexPatterns) {
+            if (pattern.isDefault()) {
+                regexField.setText(pattern.getPattern());
+                savedRegexCombo.setValue(pattern);
+                break;
+            }
+        }
     }
 }
