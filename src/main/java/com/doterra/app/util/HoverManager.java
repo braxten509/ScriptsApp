@@ -5,8 +5,6 @@ import javafx.scene.effect.DropShadow;
 import javafx.scene.effect.BlurType;
 import javafx.scene.paint.Color;
 import javafx.scene.input.MouseEvent;
-import javafx.animation.ScaleTransition;
-import javafx.util.Duration;
 import java.util.WeakHashMap;
 
 public class HoverManager {
@@ -16,8 +14,6 @@ public class HoverManager {
     private static class HoverState {
         boolean isHovered = false;
         boolean isDragging = false;
-        ScaleTransition scaleIn;
-        ScaleTransition scaleOut;
         DropShadow defaultEffect;
         DropShadow hoverEffect;
         
@@ -34,16 +30,7 @@ public class HoverManager {
         // Initialize with default effect
         button.setEffect(state.defaultEffect);
         
-        // Create smooth scale transitions
-        state.scaleIn = new ScaleTransition(Duration.millis(150), button);
-        state.scaleIn.setToX(1.05);
-        state.scaleIn.setToY(1.05);
-        
-        state.scaleOut = new ScaleTransition(Duration.millis(150), button);
-        state.scaleOut.setToX(1.0);
-        state.scaleOut.setToY(1.0);
-        
-        // Simple hover tracking
+        // Simple hover tracking - no scaling to prevent container resizing
         button.setOnMouseEntered(e -> {
             if (!state.isDragging) {
                 enterHover(button, state);
@@ -77,15 +64,11 @@ public class HoverManager {
     
     private static void enterHover(Button button, HoverState state) {
         state.isHovered = true;
-        state.scaleOut.stop();
-        state.scaleIn.play();
         button.setEffect(state.hoverEffect);
     }
     
     private static void exitHover(Button button, HoverState state) {
         state.isHovered = false;
-        state.scaleIn.stop();
-        state.scaleOut.play();
         button.setEffect(state.defaultEffect);
     }
     
