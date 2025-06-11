@@ -1298,6 +1298,27 @@ public class RegexEditorPanel extends BorderPane {
      * Evaluates a mathematical expression with comparisons
      */
     private boolean evaluateMathExpression(String expression) {
+        // Handle logical operators first (they have lower precedence)
+        if (expression.contains("&&")) {
+            String[] parts = expression.split("&&", 2);
+            boolean left = evaluateMathExpression(parts[0].trim());
+            if (!left) {
+                // Short-circuit evaluation for AND
+                return false;
+            }
+            boolean right = evaluateMathExpression(parts[1].trim());
+            return left && right;
+        } else if (expression.contains("||")) {
+            String[] parts = expression.split("\\|\\|", 2);
+            boolean left = evaluateMathExpression(parts[0].trim());
+            if (left) {
+                // Short-circuit evaluation for OR
+                return true;
+            }
+            boolean right = evaluateMathExpression(parts[1].trim());
+            return left || right;
+        }
+        
         // Handle comparison operators
         if (expression.contains("<=")) {
             String[] parts = expression.split("<=", 2);
@@ -2410,7 +2431,7 @@ public class RegexEditorPanel extends BorderPane {
             "temps",
             "Temp: (-?\\d+)",
             "{for temps}\nTemperature: {temps.group(1)}°C\n{if abs(temps.group(1)) < 10} - Mild{/if}\n{if abs(temps.group(1)) >= 20} - Extreme{/if}\n{/for}",
-            "Temperature: -15°C\n - Extreme\n\nTemperature: 25°C\n - Extreme\n\nTemperature: -5°C\n - Mild"
+            "Temperature: -15°C\n\nTemperature: 25°C\n - Extreme\n\nTemperature: -5°C\n - Mild"
         ));
         
         // Test 3: Arithmetic Operations
@@ -2420,7 +2441,7 @@ public class RegexEditorPanel extends BorderPane {
             "scores",
             "Score: (\\d+)",
             "{for scores}\nScore: {scores.group(1)}\n{if scores.group(1) + 10 > 90} - With bonus: above 90{/if}\n{if scores.group(1) * 2 > 180} - Doubled: above 180{/if}\n{if scores.group(1) / 2 < 45} - Halved: below 45{/if}\n{/for}",
-            "Score: 85\n - With bonus: above 90\n - Doubled: above 180\n\nScore: 92\n - With bonus: above 90\n - Doubled: above 180\n\nScore: 78"
+            "Score: 85\n - With bonus: above 90\n - Halved: below 45\n\nScore: 92\n - With bonus: above 90\n - Doubled: above 180\n\nScore: 78\n - Halved: below 45"
         ));
         
         // Test 4: Complex Math with sqrt
@@ -2440,7 +2461,7 @@ public class RegexEditorPanel extends BorderPane {
             "prices",
             "Price: (\\d+)",
             "{for prices}\nPrice: ${prices.group(1)}\n{if min(prices.group(1), 60) == prices.group(1)} - At or below $60{/if}\n{if max(prices.group(1), 70) == prices.group(1)} - At or above $70{/if}\n{if abs(prices.group(1) - 65) < 5} - Close to $65{/if}\n{/for}",
-            "Price: $45\n - At or below $60\n\nPrice: $85\n - At or above $70\n\nPrice: $65\n - At or above $70\n - Close to $65"
+            "Price: $45\n - At or below $60\n\nPrice: $85\n - At or above $70\n\nPrice: $65\n - Close to $65"
         ));
         
         // Test 6: Cross-Reference Between Matches
@@ -2812,6 +2833,33 @@ public class RegexEditorPanel extends BorderPane {
      */
     private boolean evaluateMathExpressionWithDebug(String expression, StringBuilder debugLog) {
         debugLog.append("Evaluating math expression: '").append(expression).append("'\n");
+        
+        // Handle logical operators first (they have lower precedence)
+        if (expression.contains("&&")) {
+            String[] parts = expression.split("&&", 2);
+            boolean left = evaluateMathExpressionWithDebug(parts[0].trim(), debugLog);
+            if (!left) {
+                // Short-circuit evaluation for AND
+                debugLog.append("Short-circuit AND: left side is false, result = false\n");
+                return false;
+            }
+            boolean right = evaluateMathExpressionWithDebug(parts[1].trim(), debugLog);
+            boolean result = left && right;
+            debugLog.append("AND operation: ").append(left).append(" && ").append(right).append(" = ").append(result).append("\n");
+            return result;
+        } else if (expression.contains("||")) {
+            String[] parts = expression.split("\\|\\|", 2);
+            boolean left = evaluateMathExpressionWithDebug(parts[0].trim(), debugLog);
+            if (left) {
+                // Short-circuit evaluation for OR
+                debugLog.append("Short-circuit OR: left side is true, result = true\n");
+                return true;
+            }
+            boolean right = evaluateMathExpressionWithDebug(parts[1].trim(), debugLog);
+            boolean result = left || right;
+            debugLog.append("OR operation: ").append(left).append(" || ").append(right).append(" = ").append(result).append("\n");
+            return result;
+        }
         
         // Handle comparison operators
         if (expression.contains("<=")) {
