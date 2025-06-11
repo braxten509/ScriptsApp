@@ -2107,8 +2107,18 @@ public class RegexEditorPanel extends BorderPane {
      */
     private void validateTemplateSyntax(String templateText) {
         Platform.runLater(() -> {
-            if (templateText == null || templateText.isEmpty()) {
-                templateArea.clearStyle(0, templateArea.getLength());
+            // Check if templateArea is still available and content hasn't changed
+            if (templateArea == null || templateText == null || templateText.isEmpty()) {
+                if (templateArea != null && templateArea.getLength() > 0) {
+                    templateArea.clearStyle(0, templateArea.getLength());
+                }
+                return;
+            }
+            
+            // Get current content to ensure we're applying styles to the right text
+            String currentContent = templateArea.getText();
+            if (!templateText.equals(currentContent)) {
+                // Content has changed since validation was scheduled, skip this update
                 return;
             }
             
@@ -2149,9 +2159,17 @@ public class RegexEditorPanel extends BorderPane {
                 spansBuilder.add(Collections.emptyList(), templateText.length() - lastEnd);
             }
             
-            // Apply the styles
-            StyleSpans<Collection<String>> styles = spansBuilder.create();
-            templateArea.setStyleSpans(0, styles);
+            // Apply the styles with additional safety check
+            try {
+                StyleSpans<Collection<String>> styles = spansBuilder.create();
+                // Double-check that content length matches expected length
+                if (templateArea.getLength() == templateText.length()) {
+                    templateArea.setStyleSpans(0, styles);
+                }
+            } catch (IndexOutOfBoundsException e) {
+                // Ignore styling errors during content changes
+                System.out.println("DEBUG: Skipping template validation due to content change");
+            }
         });
     }
     
