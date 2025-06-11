@@ -332,7 +332,8 @@ public class ImageNotesPanel extends BorderPane {
     
     private void showFullImage(ImageNote imageNote) {
         Stage imageStage = new Stage();
-        imageStage.initModality(Modality.APPLICATION_MODAL);
+        // Remove modality to make it independent
+        imageStage.setAlwaysOnTop(true);
         imageStage.setTitle(imageNote.getFileName());
         
         ByteArrayInputStream bais = new ByteArrayInputStream(imageNote.getImageData());
@@ -418,7 +419,18 @@ public class ImageNotesPanel extends BorderPane {
             updateZoomLabel(zoomLabel, imageView, image);
         });
         
+        // Position window at top center of screen
         imageStage.show();
+        
+        // Get screen bounds
+        javafx.geometry.Rectangle2D screenBounds = javafx.stage.Screen.getPrimary().getVisualBounds();
+        
+        // Calculate center X position
+        double centerX = (screenBounds.getWidth() - imageStage.getWidth()) / 2;
+        
+        // Position at top of screen with small margin
+        imageStage.setX(centerX);
+        imageStage.setY(screenBounds.getMinY() + 30); // 30px from top
     }
     
     private void updateZoomLabel(Label zoomLabel, ImageView imageView, Image image) {

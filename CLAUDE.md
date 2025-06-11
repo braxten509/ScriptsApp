@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 A JavaFX desktop application for managing doTERRA scripts for chat and email communications. The app provides a professional interface for customer service representatives to quickly access and copy pre-written responses.
 
 ### Core Features
-- **Multi-panel system**: Chat Scripts (plain text), Email Scripts (rich HTML), TODO management, Calculator, Regex Editor, and Sticky Notes
+- **Multi-panel system**: Chat Scripts (plain text), Email Scripts (rich HTML), TODO management, Calculator, Regex Editor, Sticky Notes, Calendar, and Image Notes
 - **Hierarchical organization**: Tabs contain buttons, buttons store scripts
 - **Drag-and-drop interface**: Reorder buttons within/between tabs, reorder tabs
 - **Variable templates**: Use (variable) syntax for dynamic content replacement
@@ -62,6 +62,7 @@ mvn test -Dmaven.surefire.debug
 
 ### Main Entry Point
 - `com.doterra.app.DoTerraApp` - Main application class that extends JavaFX Application
+- `com.doterra.app.DoTerraAppLauncher` - Launcher class for Maven Shade plugin compatibility
 - Creates MainView and sets up the primary stage with CSS styling
 
 ### Core Structure
@@ -77,6 +78,8 @@ mvn test -Dmaven.surefire.debug
 - `CalculatorPanel` - Built-in calculator functionality
 - `RegexEditorPanel` - Regular expression testing and template management
 - `StickyNotePanel` - Persistent notes management
+- `CalendarPanel` - Calendar view with note-taking capabilities
+- `ImageNotesPanel` - Image-based note management system
 - `ButtonController` - Manages tabs and buttons, handles reordering operations
 - `ButtonTab` - Model for organizing script buttons into tabs
 - `ScriptButton` - Model for individual script buttons with content and styling
@@ -91,13 +94,18 @@ mvn test -Dmaven.surefire.debug
   - TODO items: `doterra_todos.dat`
   - Regex templates: `regex_templates.dat`
   - Sticky notes: `sticky_notes.dat`
+  - Calendar notes: `calendar_notes.dat`
+  - Image notes: `image_notes.dat`
+  - Preferences: `chat_scripts_preferences.dat`, `email_scripts_preferences.dat`, `regex_preferences.dat`, `sticky_notes_preferences.dat`
+  - Calculator patterns: `calculator_regex_patterns.dat`
 
 ### UI Framework
 - **JavaFX 17.0.6** with additional libraries:
-  - ControlsFX for enhanced controls
-  - FormsFX for form handling
-  - ValidatorFX for input validation
-  - TilesFX for dashboard components
+  - ControlsFX 11.2.1 for enhanced controls
+  - FormsFX 11.6.0 for form handling
+  - ValidatorFX 0.5.0 for input validation
+  - TilesFX 17.1.15 for dashboard components
+  - RichTextFX 0.11.2 for rich text editing
 - **TestFX 4.0.18** for UI testing with headless support
 - **CSS Styling**: Main stylesheet at `/styles/main.css`
 - **Responsive Layout**: BorderPane with resizable sidebar and content areas

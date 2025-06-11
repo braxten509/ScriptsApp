@@ -1,0 +1,29 @@
+Jun 11, 2025 2:09:03 PM com.sun.javafx.application.PlatformImpl startup
+WARNING: Unsupported JavaFX configuration: classes were loaded from 'unnamed module @7c573cad'
+Dropped Escape call with ulEscapeCode : 0x03007703
+
+(java:4609): Gdk-WARNING **: 14:09:06.416: XSetErrorHandler() called with a GDK error trap pushed. Don't do that.
+DEBUG: Evaluating condition: prices.group(1) > 100 with currentPattern: prices index: 0
+DEBUG: After current pattern processing: 50 > 100
+DEBUG: Final expression to evaluate: 0 > 0
+DEBUG: Result: false
+DEBUG: Evaluating condition: prices.group(1) < 20 with currentPattern: prices index: 0
+DEBUG: After current pattern processing: 50 < 20
+DEBUG: Final expression to evaluate: 0 < 0
+DEBUG: Result: false
+DEBUG: Evaluating condition: prices.group(1) > 100 with currentPattern: prices index: 1
+DEBUG: After current pattern processing: 120 > 100
+DEBUG: Final expression to evaluate: 0 > 0
+DEBUG: Result: false
+DEBUG: Evaluating condition: prices.group(1) < 20 with currentPattern: prices index: 1
+DEBUG: After current pattern processing: 120 < 20
+DEBUG: Final expression to evaluate: 0 < 0
+DEBUG: Result: false
+DEBUG: Evaluating condition: prices.group(1) > 100 with currentPattern: prices index: 2
+DEBUG: After current pattern processing: 8 > 100
+DEBUG: Final expression to evaluate: 0 > 0
+DEBUG: Result: false
+DEBUG: Evaluating condition: prices.group(1) < 20 with currentPattern: prices index: 2
+DEBUG: After current pattern processing: 8 < 20
+DEBUG: Final expression to evaluate: 0 < 0
+DEBUG: Result: false

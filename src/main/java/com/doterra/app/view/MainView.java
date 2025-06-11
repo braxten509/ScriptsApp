@@ -92,8 +92,9 @@ public class MainView {
             navigationController.showPanel("calculator");
         });
         
-        // Create todo button with lazy badge initialization
-        Button todoBtn = createNavButton("Todo");
+        // Create todo button with badge for ready task count
+        StackPane todoBtnContainer = createNavButtonWithBadge("Todo", navigationController.getTodoPanel().readyTodoCountProperty());
+        Button todoBtn = (Button) todoBtnContainer.getChildren().get(0); // Get the actual button from the container
         todoBtn.setOnAction(e -> {
             setActiveButton(todoBtn);
             navigationController.showPanel("todo");
@@ -127,7 +128,7 @@ public class MainView {
         // Create feature panel at bottom
         HBox featurePanel = createFeaturePanel();
         
-        sidebar.getChildren().addAll(titleLabel, chatScriptsBtn, emailScriptsBtn, regexEditorBtn, calculatorBtn, todoBtn, stickyNoteBtn, calendarBtn, imageNotesBtn, spacer, featurePanel);
+        sidebar.getChildren().addAll(titleLabel, chatScriptsBtn, emailScriptsBtn, regexEditorBtn, calculatorBtn, todoBtnContainer, stickyNoteBtn, calendarBtn, imageNotesBtn, spacer, featurePanel);
         return sidebar;
     }
     

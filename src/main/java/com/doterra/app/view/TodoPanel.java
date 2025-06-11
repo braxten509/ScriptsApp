@@ -733,7 +733,7 @@ public class TodoPanel extends BorderPane {
         
         // Status column with custom cell factory
         TableColumn<TodoTask, TaskStatus> statusCol = new TableColumn<>("Status");
-        statusCol.setPrefWidth(150); // Reduced to fit screen
+        statusCol.setPrefWidth(150);
         statusCol.setMinWidth(100);
         statusCol.setResizable(true);
         statusCol.setStyle("-fx-border-color: transparent #cccccc transparent transparent; -fx-border-width: 0 1 0 0;");

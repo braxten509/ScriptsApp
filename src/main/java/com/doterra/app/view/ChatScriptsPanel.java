@@ -37,21 +37,28 @@ public class ChatScriptsPanel {
     private boolean contentChanged; // Flag to track if content has been modified
     private boolean isVariableReplacement; // Flag to track if current text change is from variable replacement
     private ContextMenu currentContextMenu; // Track current context menu to close it when needed
+    private boolean saveDialogShowing; // Flag to prevent multiple save dialogs
     
     public ChatScriptsPanel() {
         root = new BorderPane();
         SimpleStyler.applyDefaultLayout(root);
         
-        buttonController = new ButtonController("data/doterra_chat_buttons.dat");
+        buttonController = new ButtonController(false, "data/doterra_chat_buttons.dat"); // Don't auto-load
+        
+        // Load state synchronously during initialization
+        buttonController.loadState();
         
         // Create tab pane for button categories
         tabPane = new TabPane();
         tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         
+        // Tab selection listener will be added after tabs are set up
+        
         // Create default tab if none exist
         if (buttonController.getAllTabs().isEmpty()) {
             ButtonTab defaultTab = new ButtonTab("Quick Responses");
             buttonController.addTab(defaultTab);
+            buttonController.saveState();
         }
         
         // Create text area for script editing
@@ -109,6 +116,11 @@ public class ChatScriptsPanel {
         
         // Keyboard shortcuts
         setupKeyboardShortcuts();
+        
+        // Tab selection listener
+        tabPane.getSelectionModel().selectedItemProperty().addListener((obs, oldTab, newTab) -> {
+            // Handle tab selection if needed
+        });
         
         // Click handler to deselect buttons when clicking outside
         root.addEventFilter(MouseEvent.MOUSE_CLICKED, e -> {
@@ -229,13 +241,18 @@ public class ChatScriptsPanel {
         // Configure grid columns and rows for 6x6 with responsive sizing
         ComplexStyler.applyResponsiveGridLayout(buttonGrid, 6, 6);
         
-        ScrollPane scrollPane = new ScrollPane(buttonGrid);
+        // Create a StackPane to layer the grid and arrow overlays
+        StackPane gridContainer = new StackPane();
+        gridContainer.getChildren().add(buttonGrid);
+        
+        ScrollPane scrollPane = new ScrollPane(gridContainer);
         scrollPane.setFitToWidth(true);
         scrollPane.setFitToHeight(true);
         
         // Make grid pane fill the entire scroll pane
         buttonGrid.prefWidthProperty().bind(scrollPane.widthProperty());
         buttonGrid.prefHeightProperty().bind(scrollPane.heightProperty());
+        
         
         tab.setContent(scrollPane);
         
@@ -247,6 +264,8 @@ public class ChatScriptsPanel {
         
         // Setup right-click context menu for creating scripts
         setupGridContextMenu(buttonGrid, buttonTab);
+        
+        
         
         // Add context menu to tab
         setupTabContextMenu(tab, buttonTab);
@@ -278,7 +297,8 @@ public class ChatScriptsPanel {
     
     private void addButtonToTab(Tab tab, ScriptButton scriptButton) {
         ScrollPane scrollPane = (ScrollPane) tab.getContent();
-        GridPane buttonGrid = (GridPane) scrollPane.getContent();
+        StackPane stackPane = (StackPane) scrollPane.getContent();
+        GridPane buttonGrid = (GridPane) stackPane.getChildren().get(0);
         
         // Find the first empty position in the grid
         boolean[][] occupied = new boolean[6][6];
@@ -323,7 +343,8 @@ public class ChatScriptsPanel {
     
     private void addButtonToTabAtPosition(Tab tab, ScriptButton scriptButton, int targetRow, int targetCol) {
         ScrollPane scrollPane = (ScrollPane) tab.getContent();
-        GridPane buttonGrid = (GridPane) scrollPane.getContent();
+        StackPane stackPane = (StackPane) scrollPane.getContent();
+        GridPane buttonGrid = (GridPane) stackPane.getChildren().get(0);
         
         // Verify the position is still empty
         if (!isGridCellEmpty(buttonGrid, targetCol, targetRow)) {
@@ -474,6 +495,7 @@ public class ChatScriptsPanel {
                     if (draggedScriptButton != null) {
                         // Move button to new tab
                         if (buttonController.moveButtonBetweenTabs(sourceTabId, currentTab.getId(), draggedButtonId)) {
+                            buttonController.saveState();
                             // Remove button from source tab UI
                             removeButtonFromTabUI(sourceTabId, draggedButtonId);
                             
@@ -591,6 +613,7 @@ public class ChatScriptsPanel {
                         if (draggedScriptButton != null) {
                             // Move button to new tab
                             if (buttonController.moveButtonBetweenTabs(sourceTabId, currentTab.getId(), draggedButtonId)) {
+                                buttonController.saveState();
                                 // Remove button from source tab UI
                                 removeButtonFromTabUI(sourceTabId, draggedButtonId);
                                 
@@ -874,6 +897,7 @@ public class ChatScriptsPanel {
                 
                 ButtonTab newTab = new ButtonTab(trimmedName);
                 buttonController.addTab(newTab);
+                buttonController.saveState();
                 
                 // Remove the "+" tab temporarily
                 Tab addTab = tabPane.getTabs().get(tabPane.getTabs().size() - 1);
@@ -959,10 +983,12 @@ public class ChatScriptsPanel {
         
         Optional<ButtonType> result = alert.showAndWait();
         if (result.isPresent() && result.get() == ButtonType.OK) {
+            
             buttonController.removeButtonFromTab(tab.getId(), scriptButton.getId());
             
             ScrollPane scrollPane = (ScrollPane) tab.getContent();
-            GridPane buttonGrid = (GridPane) scrollPane.getContent();
+            StackPane stackPane = (StackPane) scrollPane.getContent();
+            GridPane buttonGrid = (GridPane) stackPane.getChildren().get(0);
             buttonGrid.getChildren().remove(button);
             
             if (selectedButton == scriptButton) {
@@ -971,6 +997,7 @@ public class ChatScriptsPanel {
                 textArea.setVisible(false);
                 textArea.setManaged(false);
             }
+            
             
             buttonController.saveState();
         }
@@ -1057,7 +1084,9 @@ public class ChatScriptsPanel {
                 if (currentTab != null && !"addTab".equals(currentTab.getId())) {
                     // Find the button in the UI and delete it
                     ScrollPane scrollPane = (ScrollPane) currentTab.getContent();
-                    GridPane buttonGrid = (GridPane) scrollPane.getContent();
+                    StackPane stackPane = (StackPane) scrollPane.getContent();
+                    GridPane buttonGrid = (GridPane) stackPane.getChildren().get(0);
+                    
                     
                     buttonGrid.getChildren().removeIf(node -> {
                         if (node instanceof Button) {
@@ -1072,6 +1101,8 @@ public class ChatScriptsPanel {
                     textArea.clear();
                     textArea.setVisible(false);
                     textArea.setManaged(false);
+                    
+                    
                     buttonController.saveState();
                 }
                 e.consume();
@@ -1084,13 +1115,16 @@ public class ChatScriptsPanel {
         for (Tab tab : tabPane.getTabs()) {
             if (tab.getContent() instanceof ScrollPane) {
                 ScrollPane scrollPane = (ScrollPane) tab.getContent();
-                if (scrollPane.getContent() instanceof GridPane) {
-                    GridPane buttonGrid = (GridPane) scrollPane.getContent();
-                    buttonGrid.getChildren().forEach(node -> {
-                        if (node instanceof Button) {
-                            ComplexStyler.toggleSelectedClass((Button) node, false);
-                        }
-                    });
+                if (scrollPane.getContent() instanceof StackPane) {
+                    StackPane stackPane = (StackPane) scrollPane.getContent();
+                    if (!stackPane.getChildren().isEmpty() && stackPane.getChildren().get(0) instanceof GridPane) {
+                        GridPane buttonGrid = (GridPane) stackPane.getChildren().get(0);
+                        buttonGrid.getChildren().forEach(node -> {
+                            if (node instanceof Button) {
+                                ComplexStyler.toggleSelectedClass((Button) node, false);
+                            }
+                        });
+                    }
                 }
             }
         }
@@ -1166,8 +1200,9 @@ public class ChatScriptsPanel {
         for (Tab tab : tabPane.getTabs()) {
             if (tabId.equals(tab.getId()) && tab.getContent() instanceof ScrollPane) {
                 ScrollPane scrollPane = (ScrollPane) tab.getContent();
-                if (scrollPane.getContent() instanceof GridPane) {
-                    GridPane grid = (GridPane) scrollPane.getContent();
+                if (scrollPane.getContent() instanceof StackPane) {
+                    StackPane stackPane = (StackPane) scrollPane.getContent();
+                    GridPane grid = (GridPane) stackPane.getChildren().get(0);
                     // Remove the button with matching ID
                     grid.getChildren().removeIf(node -> {
                         if (node instanceof Button) {
@@ -1258,6 +1293,7 @@ public class ChatScriptsPanel {
                         if (draggedScriptButton != null) {
                             // Move button to new tab
                             if (buttonController.moveButtonBetweenTabs(sourceTabId, tab.getId(), draggedButtonId)) {
+                                buttonController.saveState();
                                 // Remove button from source tab UI
                                 removeButtonFromTabUI(sourceTabId, draggedButtonId);
                                 
@@ -1346,6 +1382,7 @@ public class ChatScriptsPanel {
                 // Update the button controller tab order
                 buttonController.reorderTabs(draggedTabId, targetTabId);
                 buttonController.saveState();
+                buttonController.saveState();
                 
                 // Keep the dragged tab selected
                 tabPane.getSelectionModel().select(draggedTab);
@@ -1392,41 +1429,52 @@ public class ChatScriptsPanel {
      */
     private boolean checkAndPromptSaveChanges() {
         if (selectedButton != null && contentChanged && originalContent != null) {
-            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-            alert.setTitle("Save Changes");
-            alert.setHeaderText("Save changes to \"" + selectedButton.getName() + "\"?");
-            alert.setContentText("You have unsaved changes. Do you want to save them?");
+            // Prevent multiple save dialogs from being shown
+            if (saveDialogShowing) {
+                return false; // Don't proceed if dialog is already showing
+            }
             
-            // Configure dialog to be independent and always on top
-            DialogUtil.configureDialog(alert);
+            saveDialogShowing = true;
             
-            ButtonType saveButton = new ButtonType("Save", ButtonBar.ButtonData.YES);
-            ButtonType discardButton = new ButtonType("Discard", ButtonBar.ButtonData.NO);
-            ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
-            
-            alert.getButtonTypes().setAll(saveButton, discardButton, cancelButton);
-            
-            Optional<ButtonType> result = alert.showAndWait();
-            
-            if (result.isPresent()) {
-                if (result.get() == saveButton) {
-                    // Save the changes
-                    selectedButton.setContent(textArea.getText());
-                    buttonController.saveState();
-                    originalContent = textArea.getText();
-                    contentChanged = false;
-                    return true;
-                } else if (result.get() == discardButton) {
-                    // Discard changes
-                    contentChanged = false;
-                    return true;
+            try {
+                Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+                alert.setTitle("Save Changes");
+                alert.setHeaderText("Save changes to \"" + selectedButton.getName() + "\"?");
+                alert.setContentText("You have unsaved changes. Do you want to save them?");
+                
+                // Configure dialog to be independent and always on top
+                DialogUtil.configureDialog(alert);
+                
+                ButtonType saveButton = new ButtonType("Save", ButtonBar.ButtonData.YES);
+                ButtonType discardButton = new ButtonType("Discard", ButtonBar.ButtonData.NO);
+                ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+                
+                alert.getButtonTypes().setAll(saveButton, discardButton, cancelButton);
+                
+                Optional<ButtonType> result = alert.showAndWait();
+                
+                if (result.isPresent()) {
+                    if (result.get() == saveButton) {
+                        // Save the changes
+                        selectedButton.setContent(textArea.getText());
+                        buttonController.saveState();
+                        originalContent = textArea.getText();
+                        contentChanged = false;
+                        return true;
+                    } else if (result.get() == discardButton) {
+                        // Discard changes
+                        contentChanged = false;
+                        return true;
+                    } else {
+                        // Cancel - don't proceed
+                        return false;
+                    }
                 } else {
-                    // Cancel - don't proceed
+                    // Dialog was closed without selection - treat as cancel
                     return false;
                 }
-            } else {
-                // Dialog was closed without selection - treat as cancel
-                return false;
+            } finally {
+                saveDialogShowing = false;
             }
         }
         return true; // No changes to save

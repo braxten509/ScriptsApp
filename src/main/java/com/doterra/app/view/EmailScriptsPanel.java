@@ -39,12 +39,16 @@ public class EmailScriptsPanel {
     private boolean contentChanged; // Flag to track if content has been modified
     private boolean isVariableReplacement; // Flag to track if current content change is from variable replacement
     private ContextMenu currentContextMenu; // Track current context menu to close it when needed
+    private boolean saveDialogShowing; // Flag to prevent multiple save dialogs
     
     public EmailScriptsPanel() {
         root = new BorderPane();
         SimpleStyler.applyDefaultLayout(root);
         
-        buttonController = new ButtonController("data/doterra_email_buttons.dat");
+        buttonController = new ButtonController(false, "data/doterra_email_buttons.dat"); // Don't auto-load
+        
+        // Load state synchronously during initialization
+        buttonController.loadState();
         
         // Create tab pane for button categories
         tabPane = new TabPane();
@@ -54,6 +58,7 @@ public class EmailScriptsPanel {
         if (buttonController.getAllTabs().isEmpty()) {
             ButtonTab defaultTab = new ButtonTab("Email Templates");
             buttonController.addTab(defaultTab);
+            buttonController.saveState();
         }
         
         // Create HTML editor for rich text editing
@@ -473,6 +478,7 @@ public class EmailScriptsPanel {
                     if (draggedScriptButton != null) {
                         // Move button to new tab
                         if (buttonController.moveButtonBetweenTabs(sourceTabId, currentTab.getId(), draggedButtonId)) {
+                            buttonController.saveState();
                             // Remove button from source tab UI
                             removeButtonFromTabUI(sourceTabId, draggedButtonId);
                             
@@ -590,6 +596,7 @@ public class EmailScriptsPanel {
                         if (draggedScriptButton != null) {
                             // Move button to new tab
                             if (buttonController.moveButtonBetweenTabs(sourceTabId, currentTab.getId(), draggedButtonId)) {
+                                buttonController.saveState();
                                 // Remove button from source tab UI
                                 removeButtonFromTabUI(sourceTabId, draggedButtonId);
                                 
@@ -1286,6 +1293,7 @@ public class EmailScriptsPanel {
                         if (draggedScriptButton != null) {
                             // Move button to new tab
                             if (buttonController.moveButtonBetweenTabs(sourceTabId, tab.getId(), draggedButtonId)) {
+                                buttonController.saveState();
                                 // Remove button from source tab UI
                                 removeButtonFromTabUI(sourceTabId, draggedButtonId);
                                 
@@ -1345,6 +1353,7 @@ public class EmailScriptsPanel {
                 // Update the button controller tab order
                 buttonController.reorderTabs(draggedTabId, targetTabId);
                 buttonController.saveState();
+                buttonController.saveState();
                 
                 // Keep the dragged tab selected
                 tabPane.getSelectionModel().select(draggedTab);
@@ -1400,41 +1409,52 @@ public class EmailScriptsPanel {
         }
         
         if (selectedButton != null && contentChanged && originalContent != null) {
-            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-            alert.setTitle("Save Changes");
-            alert.setHeaderText("Save changes to \"" + selectedButton.getName() + "\"?");
-            alert.setContentText("You have unsaved changes. Do you want to save them?");
+            // Prevent multiple save dialogs from being shown
+            if (saveDialogShowing) {
+                return false; // Don't proceed if dialog is already showing
+            }
             
-            // Configure dialog to be independent and always on top
-            DialogUtil.configureDialog(alert);
+            saveDialogShowing = true;
             
-            ButtonType saveButton = new ButtonType("Save", ButtonBar.ButtonData.YES);
-            ButtonType discardButton = new ButtonType("Discard", ButtonBar.ButtonData.NO);
-            ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
-            
-            alert.getButtonTypes().setAll(saveButton, discardButton, cancelButton);
-            
-            Optional<ButtonType> result = alert.showAndWait();
-            
-            if (result.isPresent()) {
-                if (result.get() == saveButton) {
-                    // Save the changes
-                    selectedButton.setContent(htmlEditor.getHtmlText());
-                    buttonController.saveState();
-                    originalContent = htmlEditor.getHtmlText();
-                    contentChanged = false;
-                    return true;
-                } else if (result.get() == discardButton) {
-                    // Discard changes
-                    contentChanged = false;
-                    return true;
+            try {
+                Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+                alert.setTitle("Save Changes");
+                alert.setHeaderText("Save changes to \"" + selectedButton.getName() + "\"?");
+                alert.setContentText("You have unsaved changes. Do you want to save them?");
+                
+                // Configure dialog to be independent and always on top
+                DialogUtil.configureDialog(alert);
+                
+                ButtonType saveButton = new ButtonType("Save", ButtonBar.ButtonData.YES);
+                ButtonType discardButton = new ButtonType("Discard", ButtonBar.ButtonData.NO);
+                ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+                
+                alert.getButtonTypes().setAll(saveButton, discardButton, cancelButton);
+                
+                Optional<ButtonType> result = alert.showAndWait();
+                
+                if (result.isPresent()) {
+                    if (result.get() == saveButton) {
+                        // Save the changes
+                        selectedButton.setContent(htmlEditor.getHtmlText());
+                        buttonController.saveState();
+                        originalContent = htmlEditor.getHtmlText();
+                        contentChanged = false;
+                        return true;
+                    } else if (result.get() == discardButton) {
+                        // Discard changes
+                        contentChanged = false;
+                        return true;
+                    } else {
+                        // Cancel - don't proceed
+                        return false;
+                    }
                 } else {
-                    // Cancel - don't proceed
+                    // Dialog was closed without selection - treat as cancel
                     return false;
                 }
-            } else {
-                // Dialog was closed without selection - treat as cancel
-                return false;
+            } finally {
+                saveDialogShowing = false;
             }
         }
         return true; // No changes to save
