@@ -68,6 +68,7 @@ public class RegexEditorPanel extends BorderPane {
     private Map<String, Double> columnWidths = new HashMap<>();
     private Stage popOutWindow;
     private CheckBox showNoMatchesCheckBox;
+    private CheckBox debugOutputCheckBox;
     
     public RegexEditorPanel() {
         patterns = FXCollections.observableArrayList();
@@ -223,7 +224,13 @@ public class RegexEditorPanel extends BorderPane {
         Button helpBtn = new Button("?");
         helpBtn.setStyle("-fx-font-size: 12px; -fx-padding: 2 6 2 6;");
         helpBtn.setOnAction(e -> showHelpDialog());
-        templateHeader.getChildren().addAll(templateTextLabel, helpBtn);
+        
+        Button runTestsBtn = new Button("Run Tests");
+        runTestsBtn.setStyle("-fx-font-size: 12px; -fx-padding: 2 6 2 6;");
+        runTestsBtn.setOnAction(e -> runMathTests());
+        runTestsBtn.setTooltip(new Tooltip("Run comprehensive math function tests"));
+        
+        templateHeader.getChildren().addAll(templateTextLabel, helpBtn, runTestsBtn);
         templateHeader.setAlignment(Pos.CENTER_LEFT);
         
         templateArea = new CodeArea();
@@ -264,6 +271,11 @@ public class RegexEditorPanel extends BorderPane {
             }
         });
         
+        // Checkbox for debug output
+        debugOutputCheckBox = new CheckBox("Debug output");
+        debugOutputCheckBox.setSelected(false);
+        debugOutputCheckBox.setTooltip(new Tooltip("Enable debug output to console for regex processing"));
+        
         // Spacer to push buttons to the right
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -298,7 +310,7 @@ public class RegexEditorPanel extends BorderPane {
             });
         });
         
-        outputHeader.getChildren().addAll(outputLabel, showNoMatchesCheckBox, spacer, processBtn, clearBtn, popOutBtn);
+        outputHeader.getChildren().addAll(outputLabel, showNoMatchesCheckBox, debugOutputCheckBox, spacer, processBtn, clearBtn, popOutBtn);
         
         // Create WebView for selectable output with clickable links
         outputWebView = new WebView();
@@ -992,6 +1004,22 @@ public class RegexEditorPanel extends BorderPane {
     }
     
     /**
+     * Helper method to check if debug output is enabled
+     */
+    private boolean isDebugEnabled() {
+        return debugOutputCheckBox != null && debugOutputCheckBox.isSelected();
+    }
+    
+    /**
+     * Helper method to print debug output only if enabled
+     */
+    private void debugPrint(String message) {
+        if (isDebugEnabled()) {
+            System.out.println(message);
+        }
+    }
+    
+    /**
      * Escapes HTML special characters
      */
     private String escapeHtml(String text) {
@@ -1026,7 +1054,9 @@ public class RegexEditorPanel extends BorderPane {
                 String blockContent = template.substring(endIf + 1, blockEnd);
                 
                 // Evaluate the condition with current loop context
+                debugPrint("DEBUG CONDITION: Evaluating '" + condition + "' with pattern=" + currentPattern + ", index=" + currentIndex);
                 boolean conditionResult = evaluateCondition(condition, matches, currentPattern, currentIndex);
+                debugPrint("DEBUG CONDITION: Result = " + conditionResult);
                 
                 if (conditionResult) {
                     // Process the block content recursively with same context
@@ -1172,17 +1202,21 @@ public class RegexEditorPanel extends BorderPane {
             }
             
             // Find all pattern references in the condition (but not pure numbers)
-            Pattern patternRef = Pattern.compile("\\b([a-zA-Z]\\w*)(?:\\[(\\d+)\\])?(?:\\.group\\((\\d+)\\))?\\b");
+            Pattern patternRef = Pattern.compile("\\b([a-zA-Z]\\w*)(?:\\[(\\d+)\\])?(?:\\.group\\((\\d+)\\))?");
             Matcher matcher = patternRef.matcher(expression);
             
             StringBuffer sb = new StringBuffer();
             while (matcher.find()) {
+                String fullMatch = matcher.group();
                 String patternName = matcher.group(1);
                 String indexStr = matcher.group(2);
                 String groupStr = matcher.group(3);
                 
+                debugPrint("DEBUG PATTERN: Found match '" + fullMatch + "' -> name='" + patternName + "', index='" + indexStr + "', group='" + groupStr + "'");
+                
                 // Skip if it's a keyword or function
                 if (isKeywordOrFunction(patternName)) {
+                    debugPrint("DEBUG PATTERN: Skipping keyword/function: " + patternName);
                     matcher.appendReplacement(sb, matcher.group());
                     continue;
                 }
@@ -1191,6 +1225,7 @@ public class RegexEditorPanel extends BorderPane {
                 if (matches.containsKey(patternName)) {
                     // Get the value for this pattern reference
                     String value = getPatternValue(patternName, indexStr, groupStr, matches);
+                    debugPrint("DEBUG PATTERN: Pattern '" + patternName + "' exists, value='" + value + "'");
                     
                     // Try to parse as number, otherwise use 0
                     try {
@@ -1202,6 +1237,7 @@ public class RegexEditorPanel extends BorderPane {
                     }
                 } else {
                     // Not a pattern name, keep as is
+                    debugPrint("DEBUG PATTERN: Pattern '" + patternName + "' not found, keeping as-is");
                     matcher.appendReplacement(sb, matcher.group());
                 }
             }
@@ -1209,7 +1245,10 @@ public class RegexEditorPanel extends BorderPane {
             expression = sb.toString();
             
             // Evaluate the mathematical expression
-            return evaluateMathExpression(expression);
+            debugPrint("DEBUG MATH: Final expression to evaluate: '" + expression + "'");
+            boolean result = evaluateMathExpression(expression);
+            debugPrint("DEBUG MATH: Result: " + result);
+            return result;
             
         } catch (Exception e) {
             // If evaluation fails, return false
@@ -1302,6 +1341,7 @@ public class RegexEditorPanel extends BorderPane {
      * Evaluates mathematical functions in the expression
      */
     private String evaluateFunctions(String expression) {
+        debugPrint("DEBUG FUNCTIONS: Input expression: '" + expression + "'");
         // Handle nested functions by processing innermost first
         boolean changed = true;
         while (changed) {
@@ -1313,12 +1353,20 @@ public class RegexEditorPanel extends BorderPane {
             Matcher absMatcher = absPattern.matcher(expression);
             StringBuffer sb = new StringBuffer();
             while (absMatcher.find()) {
-                double value = parseSimpleExpression(absMatcher.group(1));
-                absMatcher.appendReplacement(sb, String.valueOf(Math.abs(value)));
+                String innerExpr = absMatcher.group(1);
+                debugPrint("DEBUG ABS: Found abs(" + innerExpr + ")");
+                double value = parseSimpleExpression(innerExpr);
+                debugPrint("DEBUG ABS: Parsed value: " + value);
+                double result = Math.abs(value);
+                debugPrint("DEBUG ABS: abs(" + value + ") = " + result);
+                absMatcher.appendReplacement(sb, String.valueOf(result));
                 changed = true;
             }
             absMatcher.appendTail(sb);
             expression = sb.toString();
+            if (changed) {
+                debugPrint("DEBUG ABS: Expression after abs processing: '" + expression + "'");
+            }
             
             // Handle sqrt(x)
             Pattern sqrtPattern = Pattern.compile("sqrt\\(([^()]+)\\)");
@@ -2251,5 +2299,670 @@ public class RegexEditorPanel extends BorderPane {
         return remainder.isEmpty();
     }
     
+    // Test case data structure
+    private static class TestCase {
+        final String name;
+        final String input;
+        final String patternName;
+        final String patternRegex;
+        final String template;
+        final String expectedOutput;
+        
+        TestCase(String name, String input, String patternName, String patternRegex, String template, String expectedOutput) {
+            this.name = name;
+            this.input = input;
+            this.patternName = patternName;
+            this.patternRegex = patternRegex;
+            this.template = template;
+            this.expectedOutput = expectedOutput.trim();
+        }
+    }
+    
+    // Test result data structure
+    private static class TestResult {
+        final TestCase testCase;
+        final boolean passed;
+        final String actualOutput;
+        final String debugOutput;
+        final String errorMessage;
+        
+        TestResult(TestCase testCase, boolean passed, String actualOutput, String debugOutput, String errorMessage) {
+            this.testCase = testCase;
+            this.passed = passed;
+            this.actualOutput = actualOutput;
+            this.debugOutput = debugOutput;
+            this.errorMessage = errorMessage;
+        }
+    }
+    
+    /**
+     * Runs comprehensive math function tests
+     */
+    private void runMathTests() {
+        List<TestCase> testCases = createTestCases();
+        List<TestResult> results = new ArrayList<>();
+        
+        // Save current state
+        String originalInput = inputTextArea.getText();
+        String originalTemplate = templateArea.getText();
+        ObservableList<PatternEntry> originalPatterns = FXCollections.observableArrayList(patterns);
+        boolean originalDebugState = debugOutputCheckBox.isSelected();
+        
+        try {
+            // Enable debug output for detailed logging
+            debugOutputCheckBox.setSelected(true);
+            
+            for (TestCase testCase : testCases) {
+                results.add(runSingleTest(testCase));
+            }
+            
+            // Show results dialog
+            showTestResults(results);
+            
+        } finally {
+            // Restore original state
+            inputTextArea.setText(originalInput);
+            templateArea.replaceText(originalTemplate);
+            patterns.clear();
+            patterns.addAll(originalPatterns);
+            debugOutputCheckBox.setSelected(originalDebugState);
+        }
+    }
+    
+    /**
+     * Creates all test cases
+     */
+    private List<TestCase> createTestCases() {
+        List<TestCase> tests = new ArrayList<>();
+        
+        // Test 1: Basic Comparisons
+        tests.add(new TestCase(
+            "Basic Comparisons",
+            "Value: 50, Value: 120, Value: 8",
+            "values",
+            "Value: (\\d+)",
+            "{for values}\nValue: {values.group(1)}\n{if values.group(1) > 100} - High{/if}\n{if values.group(1) < 20} - Low{/if}\n{if values.group(1) >= 50 && values.group(1) <= 100} - Medium{/if}\n{/for}",
+            "Value: 50\n - Medium\n\nValue: 120\n - High\n\nValue: 8\n - Low"
+        ));
+        
+        // Test 2: Math Functions - abs()
+        tests.add(new TestCase(
+            "Math Functions - abs()",
+            "Temp: -15, Temp: 25, Temp: -5",
+            "temps",
+            "Temp: (-?\\d+)",
+            "{for temps}\nTemperature: {temps.group(1)}°C\n{if abs(temps.group(1)) < 10} - Mild{/if}\n{if abs(temps.group(1)) >= 20} - Extreme{/if}\n{/for}",
+            "Temperature: -15°C\n - Extreme\n\nTemperature: 25°C\n - Extreme\n\nTemperature: -5°C\n - Mild"
+        ));
+        
+        // Test 3: Arithmetic Operations
+        tests.add(new TestCase(
+            "Arithmetic Operations",
+            "Score: 85, Score: 92, Score: 78",
+            "scores",
+            "Score: (\\d+)",
+            "{for scores}\nScore: {scores.group(1)}\n{if scores.group(1) + 10 > 90} - With bonus: above 90{/if}\n{if scores.group(1) * 2 > 180} - Doubled: above 180{/if}\n{if scores.group(1) / 2 < 45} - Halved: below 45{/if}\n{/for}",
+            "Score: 85\n - With bonus: above 90\n - Doubled: above 180\n\nScore: 92\n - With bonus: above 90\n - Doubled: above 180\n\nScore: 78"
+        ));
+        
+        // Test 4: Complex Math with sqrt
+        tests.add(new TestCase(
+            "Complex Math with sqrt",
+            "Distance: 144, Distance: 25, Distance: 100",
+            "distances",
+            "Distance: (\\d+)",
+            "{for distances}\nDistance: {distances.group(1)}m\n{if sqrt(distances.group(1)) == 12} - Perfect square (√{distances.group(1)} = 12){/if}\n{if sqrt(distances.group(1)) < 10} - Short distance{/if}\n{if pow(distances.group(1), 0.5) == 10} - Square root is 10{/if}\n{/for}",
+            "Distance: 144m\n - Perfect square (√144 = 12)\n\nDistance: 25m\n - Short distance\n\nDistance: 100m\n - Square root is 10"
+        ));
+        
+        // Test 5: Min/Max Functions
+        tests.add(new TestCase(
+            "Min/Max Functions",
+            "Price: 45, Price: 85, Price: 65",
+            "prices",
+            "Price: (\\d+)",
+            "{for prices}\nPrice: ${prices.group(1)}\n{if min(prices.group(1), 60) == prices.group(1)} - At or below $60{/if}\n{if max(prices.group(1), 70) == prices.group(1)} - At or above $70{/if}\n{if abs(prices.group(1) - 65) < 5} - Close to $65{/if}\n{/for}",
+            "Price: $45\n - At or below $60\n\nPrice: $85\n - At or above $70\n\nPrice: $65\n - At or above $70\n - Close to $65"
+        ));
+        
+        // Test 6: Cross-Reference Between Matches
+        tests.add(new TestCase(
+            "Cross-Reference Between Matches",
+            "Item: 50, Item: 30, Item: 80",
+            "items",
+            "Item: (\\d+)",
+            "{if abs(items[0].group(1) - items[1].group(1)) > 15}First two items differ by more than 15\n{/if}{if items[2].group(1) > items[0].group(1) + items[1].group(1)}Third item is greater than sum of first two\n{/if}{if min(items[0].group(1), min(items[1].group(1), items[2].group(1))) < 40}At least one item is below 40{/if}",
+            "First two items differ by more than 15\nAt least one item is below 40"
+        ));
+        
+        // Test 7: Edge Cases with Zero and Negative
+        tests.add(new TestCase(
+            "Edge Cases with Zero and Negative",
+            "Value: 0, Value: -10, Value: 15",
+            "vals",
+            "Value: (-?\\d+)",
+            "{for vals}\nValue: {vals.group(1)}\n{if vals.group(1) == 0} - Zero value{/if}\n{if vals.group(1) < 0} - Negative{/if}\n{if abs(vals.group(1)) > 5} - Absolute value > 5{/if}\n{/for}",
+            "Value: 0\n - Zero value\n\nValue: -10\n - Negative\n - Absolute value > 5\n\nValue: 15\n - Absolute value > 5"
+        ));
+        
+        return tests;
+    }
+    
+    /**
+     * Runs a single test case
+     */
+    private TestResult runSingleTest(TestCase testCase) {
+        StringBuilder debugLog = new StringBuilder();
+        String actualOutput = "";
+        String errorMessage = "";
+        boolean passed = false;
+        
+        try {
+            // Capture debug output
+            debugLog.append("=== TEST: ").append(testCase.name).append(" ===\n");
+            debugLog.append("Input: ").append(testCase.input).append("\n");
+            debugLog.append("Pattern: ").append(testCase.patternRegex).append("\n");
+            debugLog.append("Template: ").append(testCase.template.replace("\n", "\\n")).append("\n\n");
+            
+            // Set up test
+            inputTextArea.setText(testCase.input);
+            templateArea.replaceText(testCase.template);
+            
+            // Clear and add pattern
+            patterns.clear();
+            patterns.add(new PatternEntry(testCase.patternName, testCase.patternRegex));
+            
+            // Process template and capture detailed debug info
+            Map<String, List<MatchResult>> matches = new HashMap<>();
+            Pattern pattern = Pattern.compile(testCase.patternRegex);
+            Matcher matcher = pattern.matcher(testCase.input);
+            List<MatchResult> matchResults = new ArrayList<>();
+            
+            debugLog.append("=== PATTERN MATCHING ===\n");
+            int matchCount = 0;
+            while (matcher.find()) {
+                MatchResult matchResult = matcher.toMatchResult();
+                matchResults.add(matchResult);
+                debugLog.append("Match ").append(matchCount++).append(": \"").append(matchResult.group()).append("\"\n");
+                for (int i = 1; i <= matchResult.groupCount(); i++) {
+                    debugLog.append("  Group ").append(i).append(": \"").append(matchResult.group(i)).append("\"\n");
+                }
+            }
+            matches.put(testCase.patternName, matchResults);
+            debugLog.append("Total matches found: ").append(matchResults.size()).append("\n\n");
+            
+            // Get output with detailed debug tracing
+            debugLog.append("=== TEMPLATE PROCESSING ===\n");
+            actualOutput = processTemplateScriptWithDebug(testCase.template, matches, debugLog).trim();
+            
+            // Compare with expected
+            String normalizedActual = normalizeOutput(actualOutput);
+            String normalizedExpected = normalizeOutput(testCase.expectedOutput);
+            
+            passed = normalizedActual.equals(normalizedExpected);
+            
+            if (!passed && errorMessage.isEmpty()) {
+                // Create a concise error message for the table
+                String expectedShort = testCase.expectedOutput.replace("\n", "\\n");
+                String actualShort = actualOutput.replace("\n", "\\n");
+                
+                // Truncate if too long for table display
+                if (expectedShort.length() > 50) {
+                    expectedShort = expectedShort.substring(0, 47) + "...";
+                }
+                if (actualShort.length() > 50) {
+                    actualShort = actualShort.substring(0, 47) + "...";
+                }
+                
+                errorMessage = "Expected: " + expectedShort + " | Got: " + actualShort;
+            }
+            
+            debugLog.append("\n=== COMPARISON ===\n");
+            debugLog.append("Expected: ").append(testCase.expectedOutput.replace("\n", "\\n")).append("\n");
+            debugLog.append("Actual: ").append(actualOutput.replace("\n", "\\n")).append("\n");
+            debugLog.append("Normalized Expected: ").append(normalizedExpected.replace("\n", "\\n")).append("\n");
+            debugLog.append("Normalized Actual: ").append(normalizedActual.replace("\n", "\\n")).append("\n");
+            debugLog.append("RESULT: ").append(passed ? "PASS" : "FAIL").append("\n");
+            
+            if (!passed) {
+                debugLog.append("FAILURE REASON: ").append(errorMessage).append("\n");
+            }
+            
+        } catch (Exception e) {
+            passed = false;
+            errorMessage = e.getMessage();
+            debugLog.append("ERROR: ").append(errorMessage).append("\n");
+            debugLog.append("Stack trace: ").append(getStackTrace(e)).append("\n");
+        }
+        
+        return new TestResult(testCase, passed, actualOutput, debugLog.toString(), errorMessage);
+    }
+    
+    /**
+     * Helper method to get stack trace as string
+     */
+    private String getStackTrace(Exception e) {
+        java.io.StringWriter sw = new java.io.StringWriter();
+        java.io.PrintWriter pw = new java.io.PrintWriter(sw);
+        e.printStackTrace(pw);
+        return sw.toString();
+    }
+    
+    /**
+     * Process template script with detailed debug logging
+     */
+    private String processTemplateScriptWithDebug(String template, Map<String, List<MatchResult>> matches, StringBuilder debugLog) {
+        debugLog.append("Processing template: ").append(template.replace("\n", "\\n")).append("\n");
+        return processTemplateScriptWithDebug(template, matches, null, -1, debugLog);
+    }
+    
+    /**
+     * Process template script with detailed debug logging and loop context
+     */
+    private String processTemplateScriptWithDebug(String template, Map<String, List<MatchResult>> matches,
+                                                 String currentPattern, int currentIndex, StringBuilder debugLog) {
+        StringBuilder result = new StringBuilder();
+        int pos = 0;
+        
+        while (pos < template.length()) {
+            // Handle if statements
+            if (template.startsWith("{if ", pos)) {
+                int endIf = template.indexOf("}", pos);
+                if (endIf == -1) break;
+                
+                String condition = template.substring(pos + 4, endIf).trim();
+                int blockEnd = findMatchingEndIf(template, endIf + 1);
+                if (blockEnd == -1) break;
+                
+                String blockContent = template.substring(endIf + 1, blockEnd);
+                
+                debugLog.append("Found IF condition: '").append(condition).append("' with pattern=").append(currentPattern).append(", index=").append(currentIndex).append("\n");
+                
+                // Evaluate the condition with current loop context
+                boolean conditionResult = evaluateConditionWithDebug(condition, matches, currentPattern, currentIndex, debugLog);
+                
+                debugLog.append("Condition result: ").append(conditionResult).append("\n");
+                
+                if (conditionResult) {
+                    debugLog.append("Processing IF block content: '").append(blockContent.replace("\n", "\\n")).append("'\n");
+                    String processedBlock = processTemplateScriptWithDebug(blockContent, matches, currentPattern, currentIndex, debugLog);
+                    result.append(processedBlock);
+                    debugLog.append("IF block produced: '").append(processedBlock.replace("\n", "\\n")).append("'\n");
+                } else {
+                    debugLog.append("Skipping IF block (condition false)\n");
+                }
+                
+                pos = blockEnd + 5; // Skip past {/if}
+            }
+            // Handle for loops
+            else if (template.startsWith("{for ", pos)) {
+                int endFor = template.indexOf("}", pos);
+                if (endFor == -1) break;
+                
+                String patternName = template.substring(pos + 5, endFor).trim();
+                int loopEnd = template.indexOf("{/for}", endFor);
+                if (loopEnd == -1) break;
+                
+                String loopContent = template.substring(endFor + 1, loopEnd);
+                List<MatchResult> patternMatches = matches.get(patternName);
+                
+                debugLog.append("Found FOR loop: pattern='").append(patternName).append("', content='").append(loopContent.replace("\n", "\\n")).append("'\n");
+                debugLog.append("Pattern matches: ").append(patternMatches != null ? patternMatches.size() : 0).append("\n");
+                
+                if (patternMatches != null && !patternMatches.isEmpty()) {
+                    for (int i = 0; i < patternMatches.size(); i++) {
+                        debugLog.append("Processing FOR iteration ").append(i).append(" for pattern ").append(patternName).append("\n");
+                        
+                        // First, replace pattern variables for this iteration
+                        String processedLoop = processTemplateVariablesWithDebug(loopContent, matches, patternName, i, debugLog);
+                        
+                        // Then, process nested template commands with the current loop context
+                        processedLoop = processTemplateScriptWithDebug(processedLoop, matches, patternName, i, debugLog);
+                        
+                        // Remove command-only lines from loop content
+                        processedLoop = removeCommandOnlyLines(processedLoop);
+                        // Clean up excessive newlines
+                        processedLoop = processedLoop.replaceAll("\n\n+", "\n");
+                        // Trim leading and trailing whitespace from each iteration
+                        processedLoop = processedLoop.trim();
+                        
+                        debugLog.append("FOR iteration ").append(i).append(" final result: '").append(processedLoop.replace("\n", "\\n")).append("'\n");
+                        
+                        if (!processedLoop.isEmpty()) {
+                            result.append(processedLoop);
+                            // Add newline only if not the last iteration and content exists
+                            if (i < patternMatches.size() - 1) {
+                                result.append("\n");
+                            }
+                        }
+                    }
+                } else if (showNoMatchesCheckBox != null && showNoMatchesCheckBox.isSelected()) {
+                    // Show no matches found message in italics
+                    result.append("<i>No matches found for \"").append(patternName).append("\"</i>");
+                    debugLog.append("No matches found for pattern '").append(patternName).append("'\n");
+                }
+                
+                pos = loopEnd + 6;
+            }
+            // Handle variables
+            else if (template.startsWith("{", pos)) {
+                int end = template.indexOf("}", pos);
+                if (end == -1) {
+                    result.append(template.charAt(pos));
+                    pos++;
+                    continue;
+                }
+                
+                String variable = template.substring(pos + 1, end);
+                debugLog.append("Processing variable: '").append(variable).append("'\n");
+                String processed = processVariable(variable, matches, currentPattern, currentIndex);
+                debugLog.append("Variable '").append(variable).append("' resolved to: '").append(processed).append("'\n");
+                
+                // Mark empty results with a special marker
+                if (processed.isEmpty() || processed.equals("{" + variable + "}")) {
+                    result.append("__EMPTY_PATTERN__");
+                } else {
+                    result.append(processed);
+                }
+                pos = end + 1;
+            }
+            else {
+                result.append(template.charAt(pos));
+                pos++;
+            }
+        }
+        
+        // Remove command-only lines and handle empty patterns
+        String finalResult = processOutputLines(result.toString());
+        debugLog.append("Final processed result: '").append(finalResult.replace("\n", "\\n")).append("'\n");
+        return finalResult;
+    }
+    
+    /**
+     * Process template variables with debug logging
+     */
+    private String processTemplateVariablesWithDebug(String template, Map<String, List<MatchResult>> matches, 
+                                                    String currentPattern, int currentIndex, StringBuilder debugLog) {
+        debugLog.append("Processing template variables for pattern '").append(currentPattern).append("' index ").append(currentIndex).append("\n");
+        debugLog.append("Template before variable processing: '").append(template.replace("\n", "\\n")).append("'\n");
+        
+        // Process the template variables using the existing method
+        String result = processTemplateVariables(template, matches, currentPattern, currentIndex);
+        
+        debugLog.append("Template after variable processing: '").append(result.replace("\n", "\\n")).append("'\n");
+        return result;
+    }
+    
+    /**
+     * Evaluate condition with debug logging
+     */
+    private boolean evaluateConditionWithDebug(String condition, Map<String, List<MatchResult>> matches,
+                                             String currentPattern, int currentIndex, StringBuilder debugLog) {
+        debugLog.append("Evaluating condition: '").append(condition).append("'\n");
+        
+        try {
+            // Replace pattern references with their numeric values
+            String expression = condition;
+            
+            // First handle current pattern references if we're in a loop
+            if (currentPattern != null && currentIndex >= 0) {
+                debugLog.append("Processing current pattern references (").append(currentPattern).append("[").append(currentIndex).append("])\n");
+                // Handle pattern.group(n) syntax for current loop pattern
+                Pattern groupPattern = Pattern.compile("\\b" + Pattern.quote(currentPattern) + "\\.group\\((\\d+)\\)");
+                Matcher groupMatcher = groupPattern.matcher(expression);
+                StringBuffer sb = new StringBuffer();
+                
+                while (groupMatcher.find()) {
+                    int groupNum = Integer.parseInt(groupMatcher.group(1));
+                    List<MatchResult> patternMatches = matches.get(currentPattern);
+                    String replacement = "0";
+                    
+                    if (patternMatches != null && currentIndex < patternMatches.size()) {
+                        MatchResult match = patternMatches.get(currentIndex);
+                        if (groupNum <= match.groupCount()) {
+                            String groupValue = match.group(groupNum);
+                            replacement = groupValue != null ? groupValue : "0";
+                        }
+                    }
+                    
+                    debugLog.append("Replacing '").append(groupMatcher.group()).append("' with '").append(replacement).append("'\n");
+                    groupMatcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+                }
+                groupMatcher.appendTail(sb);
+                expression = sb.toString();
+                debugLog.append("After current pattern processing: '").append(expression).append("'\n");
+            }
+            
+            // Find all pattern references in the condition (but not pure numbers)
+            Pattern patternRef = Pattern.compile("\\b([a-zA-Z]\\w*)(?:\\[(\\d+)\\])?(?:\\.group\\((\\d+)\\))?");
+            Matcher matcher = patternRef.matcher(expression);
+            
+            StringBuffer sb = new StringBuffer();
+            while (matcher.find()) {
+                String fullMatch = matcher.group();
+                String patternName = matcher.group(1);
+                String indexStr = matcher.group(2);
+                String groupStr = matcher.group(3);
+                
+                debugLog.append("Found pattern reference: '").append(fullMatch).append("' -> name='").append(patternName).append("', index='").append(indexStr).append("', group='").append(groupStr).append("'\n");
+                
+                // Skip if it's a keyword or function
+                if (isKeywordOrFunction(patternName)) {
+                    debugLog.append("Skipping keyword/function: ").append(patternName).append("\n");
+                    matcher.appendReplacement(sb, matcher.group());
+                    continue;
+                }
+                
+                // Only process if this is actually a pattern name that exists
+                if (matches.containsKey(patternName)) {
+                    // Get the value for this pattern reference
+                    String value = getPatternValue(patternName, indexStr, groupStr, matches);
+                    debugLog.append("Pattern '").append(patternName).append("' exists, value='").append(value).append("'\n");
+                    
+                    // Try to parse as number, otherwise use 0
+                    try {
+                        Double.parseDouble(value);
+                        matcher.appendReplacement(sb, Matcher.quoteReplacement(value));
+                    } catch (NumberFormatException e) {
+                        // If it's not a number, use the length of the string
+                        matcher.appendReplacement(sb, String.valueOf(value.length()));
+                    }
+                } else {
+                    // Not a pattern name, keep as is
+                    debugLog.append("Pattern '").append(patternName).append("' not found, keeping as-is\n");
+                    matcher.appendReplacement(sb, matcher.group());
+                }
+            }
+            matcher.appendTail(sb);
+            expression = sb.toString();
+            
+            debugLog.append("Final math expression: '").append(expression).append("'\n");
+            
+            // Evaluate the mathematical expression
+            boolean result = evaluateMathExpressionWithDebug(expression, debugLog);
+            debugLog.append("Math evaluation result: ").append(result).append("\n");
+            return result;
+            
+        } catch (Exception e) {
+            debugLog.append("ERROR in condition evaluation: ").append(e.getMessage()).append("\n");
+            return false;
+        }
+    }
+    
+    /**
+     * Evaluate math expression with debug logging
+     */
+    private boolean evaluateMathExpressionWithDebug(String expression, StringBuilder debugLog) {
+        debugLog.append("Evaluating math expression: '").append(expression).append("'\n");
+        
+        // Handle comparison operators
+        if (expression.contains("<=")) {
+            String[] parts = expression.split("<=", 2);
+            double left = evaluateArithmetic(parts[0].trim());
+            double right = evaluateArithmetic(parts[1].trim());
+            boolean result = left <= right;
+            debugLog.append("Comparison: ").append(left).append(" <= ").append(right).append(" = ").append(result).append("\n");
+            return result;
+        } else if (expression.contains(">=")) {
+            String[] parts = expression.split(">=", 2);
+            double left = evaluateArithmetic(parts[0].trim());
+            double right = evaluateArithmetic(parts[1].trim());
+            boolean result = left >= right;
+            debugLog.append("Comparison: ").append(left).append(" >= ").append(right).append(" = ").append(result).append("\n");
+            return result;
+        } else if (expression.contains("==")) {
+            String[] parts = expression.split("==", 2);
+            double left = evaluateArithmetic(parts[0].trim());
+            double right = evaluateArithmetic(parts[1].trim());
+            boolean result = Math.abs(left - right) < 0.0001;
+            debugLog.append("Comparison: ").append(left).append(" == ").append(right).append(" = ").append(result).append("\n");
+            return result;
+        } else if (expression.contains("!=")) {
+            String[] parts = expression.split("!=", 2);
+            double left = evaluateArithmetic(parts[0].trim());
+            double right = evaluateArithmetic(parts[1].trim());
+            boolean result = Math.abs(left - right) >= 0.0001;
+            debugLog.append("Comparison: ").append(left).append(" != ").append(right).append(" = ").append(result).append("\n");
+            return result;
+        } else if (expression.contains("<")) {
+            String[] parts = expression.split("<", 2);
+            double left = evaluateArithmetic(parts[0].trim());
+            double right = evaluateArithmetic(parts[1].trim());
+            boolean result = left < right;
+            debugLog.append("Comparison: ").append(left).append(" < ").append(right).append(" = ").append(result).append("\n");
+            return result;
+        } else if (expression.contains(">")) {
+            String[] parts = expression.split(">", 2);
+            double left = evaluateArithmetic(parts[0].trim());
+            double right = evaluateArithmetic(parts[1].trim());
+            boolean result = left > right;
+            debugLog.append("Comparison: ").append(left).append(" > ").append(right).append(" = ").append(result).append("\n");
+            return result;
+        } else {
+            // No comparison operator, evaluate as boolean (non-zero is true)
+            double value = evaluateArithmetic(expression);
+            boolean result = value != 0;
+            debugLog.append("Boolean evaluation: ").append(value).append(" != 0 = ").append(result).append("\n");
+            return result;
+        }
+    }
+    
+    /**
+     * Normalizes output for comparison (removes extra whitespace, etc.)
+     */
+    private String normalizeOutput(String output) {
+        return output.replaceAll("\\s+", " ").trim();
+    }
+    
+    /**
+     * Shows test results in a popup dialog
+     */
+    private void showTestResults(List<TestResult> results) {
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle("Math Function Test Results");
+        dialog.setHeaderText(null);
+        
+        // Configure dialog to be independent and always on top
+        DialogUtil.configureDialog(dialog);
+        
+        VBox content = new VBox(10);
+        content.setPadding(new Insets(15));
+        content.setPrefWidth(800);
+        content.setPrefHeight(600);
+        
+        // Summary
+        long passedCount = results.stream().mapToLong(r -> r.passed ? 1 : 0).sum();
+        long failedCount = results.size() - passedCount;
+        
+        Label summaryLabel = new Label(String.format("Test Results: %d passed, %d failed out of %d total", 
+                                                     passedCount, failedCount, results.size()));
+        summaryLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
+        
+        // Results table
+        TableView<TestResult> resultsTable = new TableView<>();
+        resultsTable.setPrefHeight(300);
+        
+        TableColumn<TestResult, String> nameCol = new TableColumn<>("Test Name");
+        nameCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().testCase.name));
+        nameCol.setPrefWidth(200);
+        
+        TableColumn<TestResult, String> statusCol = new TableColumn<>("Status");
+        statusCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().passed ? "PASS" : "FAIL"));
+        statusCol.setPrefWidth(80);
+        statusCol.setCellFactory(column -> new TableCell<TestResult, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    setText(item);
+                    if ("PASS".equals(item)) {
+                        setStyle("-fx-text-fill: green; -fx-font-weight: bold;");
+                    } else {
+                        setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
+                    }
+                }
+            }
+        });
+        
+        TableColumn<TestResult, String> errorCol = new TableColumn<>("Error/Failure Reason");
+        errorCol.setCellValueFactory(data -> new SimpleStringProperty(
+            data.getValue().errorMessage != null && !data.getValue().errorMessage.isEmpty() 
+                ? data.getValue().errorMessage : ""));
+        errorCol.setPrefWidth(300);
+        errorCol.setCellFactory(column -> new TableCell<TestResult, String>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setTooltip(null);
+                } else {
+                    setText(item);
+                    if (!item.isEmpty()) {
+                        // Set tooltip for long error messages
+                        setTooltip(new Tooltip(item));
+                        setStyle("-fx-text-fill: #cc0000;");
+                    } else {
+                        setTooltip(null);
+                        setStyle("");
+                    }
+                }
+            }
+        });
+        
+        resultsTable.getColumns().addAll(nameCol, statusCol, errorCol);
+        resultsTable.setItems(FXCollections.observableArrayList(results));
+        
+        // Debug output area
+        Label debugLabel = new Label("Debug Output for Selected Test:");
+        debugLabel.setStyle("-fx-font-weight: bold;");
+        
+        TextArea debugArea = new TextArea();
+        debugArea.setEditable(false);
+        debugArea.setPrefRowCount(10);
+        debugArea.setStyle("-fx-font-family: 'Courier New', monospace; -fx-font-size: 12px;");
+        
+        // Update debug area when selection changes
+        resultsTable.getSelectionModel().selectedItemProperty().addListener((obs, oldSelection, newSelection) -> {
+            if (newSelection != null) {
+                debugArea.setText(newSelection.debugOutput);
+            }
+        });
+        
+        // Select first item by default
+        if (!results.isEmpty()) {
+            resultsTable.getSelectionModel().selectFirst();
+        }
+        
+        content.getChildren().addAll(summaryLabel, resultsTable, debugLabel, debugArea);
+        
+        dialog.getDialogPane().setContent(content);
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        
+        dialog.showAndWait();
+    }
     
 }
