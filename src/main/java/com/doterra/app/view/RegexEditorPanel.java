@@ -3289,6 +3289,60 @@ public class RegexEditorPanel extends BorderPane {
                 
                 pos = loopEnd + 6;
             }
+            // Handle VAR declarations
+            else if (template.startsWith("{VAR ", pos)) {
+                int end = template.indexOf("}", pos);
+                if (end == -1) {
+                    result.append(template.charAt(pos));
+                    pos++;
+                    continue;
+                }
+                
+                String varDeclaration = template.substring(pos + 5, end).trim();
+                debugLog.append("Processing VAR declaration: '").append(varDeclaration).append("'\n");
+                
+                // Parse variable declaration: variableName = expression
+                if (varDeclaration.contains("=")) {
+                    String[] parts = varDeclaration.split("=", 2);
+                    String varName = parts[0].trim();
+                    String expression = parts[1].trim();
+                    
+                    // Evaluate the expression and store the variable
+                    double value = evaluateMathWithContext(expression, matches, currentPattern, currentIndex);
+                    templateVariables.put(varName, value);
+                    
+                    debugLog.append("Set variable ").append(varName).append(" = ").append(value).append("\n");
+                }
+                
+                pos = end + 1;
+            }
+            // Handle MATH expressions
+            else if (template.startsWith("{MATH ", pos)) {
+                int end = template.indexOf("}", pos);
+                if (end == -1) {
+                    result.append(template.charAt(pos));
+                    pos++;
+                    continue;
+                }
+                
+                String mathExpression = template.substring(pos + 6, end).trim();
+                debugLog.append("Processing MATH expression: '").append(mathExpression).append("'\n");
+                
+                double value = evaluateMathWithContext(mathExpression, matches, currentPattern, currentIndex);
+                
+                // Format the result nicely (remove .0 for whole numbers)
+                String formattedResult;
+                if (value == (long) value) {
+                    formattedResult = String.valueOf((long) value);
+                } else {
+                    formattedResult = String.valueOf(value);
+                }
+                
+                debugLog.append("MATH result: ").append(formattedResult).append("\n");
+                result.append(formattedResult);
+                
+                pos = end + 1;
+            }
             // Handle variables
             else if (template.startsWith("{", pos)) {
                 int end = template.indexOf("}", pos);
