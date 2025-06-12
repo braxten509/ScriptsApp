@@ -1160,18 +1160,7 @@ public class RegexEditorPanel extends BorderPane {
                 }
                 
                 String varDeclaration = template.substring(pos + 5, end).trim();
-                // Parse variable declaration: variableName = expression
-                if (varDeclaration.contains("=")) {
-                    String[] parts = varDeclaration.split("=", 2);
-                    String varName = parts[0].trim();
-                    String expression = parts[1].trim();
-                    
-                    // Evaluate the expression and store the variable
-                    double value = evaluateMathWithContext(expression, matches, currentPattern, currentIndex);
-                    templateVariables.put(varName, value);
-                    
-                    debugPrint("DEBUG VAR: Set variable " + varName + " = " + value);
-                }
+                processVariableAssignment(varDeclaration, matches, currentPattern, currentIndex);
                 
                 pos = end + 1;
             }
@@ -1187,11 +1176,11 @@ public class RegexEditorPanel extends BorderPane {
                 String mathExpression = template.substring(pos + 6, end).trim();
                 double value = evaluateMathWithContext(mathExpression, matches, currentPattern, currentIndex);
                 
-                // Format the result nicely (remove .0 for whole numbers)
+                // Format the result nicely (remove .0 for whole numbers, limit decimals to 2 places)
                 if (value == (long) value) {
                     result.append(String.valueOf((long) value));
                 } else {
-                    result.append(String.valueOf(value));
+                    result.append(String.format("%.2f", value));
                 }
                 
                 debugPrint("DEBUG MATH: Evaluated " + mathExpression + " = " + value);
@@ -2442,6 +2431,11 @@ public class RegexEditorPanel extends BorderPane {
             return true;
         }
         
+        // Check for variable references (stored in templateVariables)
+        if (isValidVariableName(command)) {
+            return true;
+        }
+        
         // Check for pattern references
         return isValidPatternReference(command);
     }
@@ -2541,6 +2535,136 @@ public class RegexEditorPanel extends BorderPane {
         }
         
         return remainder.isEmpty();
+    }
+    
+    /**
+     * Checks if a name is a valid variable name (alphanumeric + underscore)
+     * @param name the variable name to check
+     * @return true if the name is a valid variable name
+     */
+    private boolean isValidVariableName(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            return false;
+        }
+        
+        name = name.trim();
+        
+        // Valid variable names: letters, numbers, underscore, starting with letter or underscore
+        return name.matches("[a-zA-Z_][a-zA-Z0-9_]*");
+    }
+    
+    /**
+     * Process variable assignment with support for shortcut operators
+     * @param varDeclaration the variable declaration string
+     * @param matches pattern matches for context
+     * @param currentPattern current pattern name
+     * @param currentIndex current loop index
+     */
+    private void processVariableAssignment(String varDeclaration, Map<String, List<MatchResult>> matches, String currentPattern, int currentIndex) {
+        if (varDeclaration == null || varDeclaration.trim().isEmpty()) {
+            return;
+        }
+        
+        varDeclaration = varDeclaration.trim();
+        
+        // Handle increment/decrement operators: varName++, varName--, ++varName, --varName
+        if (varDeclaration.endsWith("++")) {
+            String varName = varDeclaration.substring(0, varDeclaration.length() - 2).trim();
+            double currentValue = templateVariables.getOrDefault(varName, 0.0);
+            templateVariables.put(varName, currentValue + 1);
+            debugPrint("DEBUG VAR: " + varName + "++ = " + (currentValue + 1));
+            return;
+        }
+        
+        if (varDeclaration.endsWith("--")) {
+            String varName = varDeclaration.substring(0, varDeclaration.length() - 2).trim();
+            double currentValue = templateVariables.getOrDefault(varName, 0.0);
+            templateVariables.put(varName, currentValue - 1);
+            debugPrint("DEBUG VAR: " + varName + "-- = " + (currentValue - 1));
+            return;
+        }
+        
+        if (varDeclaration.startsWith("++")) {
+            String varName = varDeclaration.substring(2).trim();
+            double currentValue = templateVariables.getOrDefault(varName, 0.0);
+            templateVariables.put(varName, currentValue + 1);
+            debugPrint("DEBUG VAR: ++" + varName + " = " + (currentValue + 1));
+            return;
+        }
+        
+        if (varDeclaration.startsWith("--")) {
+            String varName = varDeclaration.substring(2).trim();
+            double currentValue = templateVariables.getOrDefault(varName, 0.0);
+            templateVariables.put(varName, currentValue - 1);
+            debugPrint("DEBUG VAR: --" + varName + " = " + (currentValue - 1));
+            return;
+        }
+        
+        // Handle compound assignment operators: +=, -=, *=, /=
+        if (varDeclaration.contains("+=")) {
+            String[] parts = varDeclaration.split("\\+=", 2);
+            String varName = parts[0].trim();
+            String expression = parts[1].trim();
+            double currentValue = templateVariables.getOrDefault(varName, 0.0);
+            double addValue = evaluateMathWithContext(expression, matches, currentPattern, currentIndex);
+            double result = currentValue + addValue;
+            templateVariables.put(varName, result);
+            debugPrint("DEBUG VAR: " + varName + " += " + addValue + " = " + result);
+            return;
+        }
+        
+        if (varDeclaration.contains("-=")) {
+            String[] parts = varDeclaration.split("-=", 2);
+            String varName = parts[0].trim();
+            String expression = parts[1].trim();
+            double currentValue = templateVariables.getOrDefault(varName, 0.0);
+            double subValue = evaluateMathWithContext(expression, matches, currentPattern, currentIndex);
+            double result = currentValue - subValue;
+            templateVariables.put(varName, result);
+            debugPrint("DEBUG VAR: " + varName + " -= " + subValue + " = " + result);
+            return;
+        }
+        
+        if (varDeclaration.contains("*=")) {
+            String[] parts = varDeclaration.split("\\*=", 2);
+            String varName = parts[0].trim();
+            String expression = parts[1].trim();
+            double currentValue = templateVariables.getOrDefault(varName, 0.0);
+            double mulValue = evaluateMathWithContext(expression, matches, currentPattern, currentIndex);
+            double result = currentValue * mulValue;
+            templateVariables.put(varName, result);
+            debugPrint("DEBUG VAR: " + varName + " *= " + mulValue + " = " + result);
+            return;
+        }
+        
+        if (varDeclaration.contains("/=")) {
+            String[] parts = varDeclaration.split("/=", 2);
+            String varName = parts[0].trim();
+            String expression = parts[1].trim();
+            double currentValue = templateVariables.getOrDefault(varName, 0.0);
+            double divValue = evaluateMathWithContext(expression, matches, currentPattern, currentIndex);
+            if (divValue != 0) {
+                double result = currentValue / divValue;
+                templateVariables.put(varName, result);
+                debugPrint("DEBUG VAR: " + varName + " /= " + divValue + " = " + result);
+            } else {
+                debugPrint("DEBUG VAR: Division by zero in " + varName + " /= " + divValue);
+            }
+            return;
+        }
+        
+        // Handle regular assignment: varName = expression
+        if (varDeclaration.contains("=")) {
+            String[] parts = varDeclaration.split("=", 2);
+            String varName = parts[0].trim();
+            String expression = parts[1].trim();
+            
+            // Evaluate the expression and store the variable
+            double value = evaluateMathWithContext(expression, matches, currentPattern, currentIndex);
+            templateVariables.put(varName, value);
+            
+            debugPrint("DEBUG VAR: Set variable " + varName + " = " + value);
+        }
     }
     
     // Test case data structure (kept for compatibility with existing test result display)
@@ -3301,18 +3425,8 @@ public class RegexEditorPanel extends BorderPane {
                 String varDeclaration = template.substring(pos + 5, end).trim();
                 debugLog.append("Processing VAR declaration: '").append(varDeclaration).append("'\n");
                 
-                // Parse variable declaration: variableName = expression
-                if (varDeclaration.contains("=")) {
-                    String[] parts = varDeclaration.split("=", 2);
-                    String varName = parts[0].trim();
-                    String expression = parts[1].trim();
-                    
-                    // Evaluate the expression and store the variable
-                    double value = evaluateMathWithContext(expression, matches, currentPattern, currentIndex);
-                    templateVariables.put(varName, value);
-                    
-                    debugLog.append("Set variable ").append(varName).append(" = ").append(value).append("\n");
-                }
+                processVariableAssignment(varDeclaration, matches, currentPattern, currentIndex);
+                debugLog.append("Variable assignment completed\n");
                 
                 pos = end + 1;
             }
@@ -3330,12 +3444,12 @@ public class RegexEditorPanel extends BorderPane {
                 
                 double value = evaluateMathWithContext(mathExpression, matches, currentPattern, currentIndex);
                 
-                // Format the result nicely (remove .0 for whole numbers)
+                // Format the result nicely (remove .0 for whole numbers, limit decimals to 2 places)
                 String formattedResult;
                 if (value == (long) value) {
                     formattedResult = String.valueOf((long) value);
                 } else {
-                    formattedResult = String.valueOf(value);
+                    formattedResult = String.format("%.2f", value);
                 }
                 
                 debugLog.append("MATH result: ").append(formattedResult).append("\n");
