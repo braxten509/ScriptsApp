@@ -81,6 +81,7 @@ public class RegexEditorPanel extends BorderPane {
     private RegexTestManager testManager;
     private TableView<RegexTest> testsTable;
     private ObservableList<RegexTest> testsList;
+    private Map<String, Double> templateVariables;
     
     public RegexEditorPanel() {
         patterns = FXCollections.observableArrayList();
@@ -88,6 +89,7 @@ public class RegexEditorPanel extends BorderPane {
         testManager = new RegexTestManager();
         testsList = FXCollections.observableArrayList();
         testsList.addAll(testManager.getTests());
+        templateVariables = new HashMap<>();
         loadTemplates();
         loadPreferences();
         setupUI();
@@ -803,7 +805,15 @@ public class RegexEditorPanel extends BorderPane {
             new HelpEntry("{if condition}...{/if}", "Conditional block (condition evaluated)"),
             new HelpEntry("{if pattern > 5}...{/if}", "Mathematical comparison"),
             new HelpEntry("{if pattern1 + pattern2 > 10}...{/if}", "Mathematical operations"),
-            new HelpEntry("Math operations", "+ - * / % supported in conditions"),
+            new HelpEntry("{MATH expression}", "Evaluates and displays mathematical expression"),
+            new HelpEntry("{MATH 5 + 3}", "Displays: 8"),
+            new HelpEntry("{MATH sqrt(16)}", "Displays: 4"),
+            new HelpEntry("{VAR name = expression}", "Declares variable with calculated value"),
+            new HelpEntry("{VAR tax = 0.08}", "Creates variable 'tax' with value 0.08"),
+            new HelpEntry("{variable_name}", "Shows stored variable value"),
+            new HelpEntry("{MATH var1 + var2}", "Math expressions can use variables"),
+            new HelpEntry("{VAR total = price * (1 + tax)}", "Variables can reference patterns and other variables"),
+            new HelpEntry("Math operations", "+ - * / % supported in conditions and MATH/VAR"),
             new HelpEntry("Comparisons", "< > <= >= == != supported"),
             new HelpEntry("Math functions", "abs(), sqrt(), pow(x,y), min(x,y), max(x,y)")
         );
@@ -817,15 +827,23 @@ public class RegexEditorPanel extends BorderPane {
         TextArea exampleArea = new TextArea();
         exampleArea.setPrefRowCount(10);
         exampleArea.setEditable(false);
-        exampleArea.setText("Input: 'Price $50, Price $120, Price $8'\n" +
+        exampleArea.setText("Example 1 - With Patterns:\n" +
+                          "Input: 'Price $50, Price $120, Price $8'\n" +
                           "Pattern 'prices': \\$(\\d+)\n\n" +
                           "Template:\n" +
+                          "{VAR tax_rate = 0.08}\n" +
                           "{for prices}\n" +
                           "Price: ${prices.group(1)}\n" +
+                          "{VAR tax = prices.group(1) * tax_rate}\n" +
+                          "Tax: {MATH tax}\n" +
+                          "Total: {MATH prices.group(1) + tax}\n" +
                           "{if prices.group(1) > 100} - Premium item{/if}\n" +
-                          "{if prices.group(1) < 20} - Budget item{/if}\n" +
                           "{/for}\n\n" +
-                          "Math example: {if abs(prices[0].group(1) - 100) < 50}Close to $100{/if}");
+                          "Example 2 - MATH/VAR Only (no patterns needed):\n" +
+                          "Template:\n" +
+                          "{VAR radius = 5}\n" +
+                          "Area: {MATH 3.14159 * pow(radius, 2)}\n" +
+                          "Circumference: {MATH 2 * 3.14159 * radius}");
         
         content.getChildren().addAll(helpTable, exampleLabel, exampleArea);
         
@@ -1121,6 +1139,54 @@ public class RegexEditorPanel extends BorderPane {
                 
                 pos = loopEnd + 6;
             }
+            // Handle variable declarations
+            else if (template.startsWith("{VAR ", pos)) {
+                int end = template.indexOf("}", pos);
+                if (end == -1) {
+                    result.append(template.charAt(pos));
+                    pos++;
+                    continue;
+                }
+                
+                String varDeclaration = template.substring(pos + 5, end).trim();
+                // Parse variable declaration: variableName = expression
+                if (varDeclaration.contains("=")) {
+                    String[] parts = varDeclaration.split("=", 2);
+                    String varName = parts[0].trim();
+                    String expression = parts[1].trim();
+                    
+                    // Evaluate the expression and store the variable
+                    double value = evaluateMathWithContext(expression, matches, currentPattern, currentIndex);
+                    templateVariables.put(varName, value);
+                    
+                    debugPrint("DEBUG VAR: Set variable " + varName + " = " + value);
+                }
+                
+                pos = end + 1;
+            }
+            // Handle math expressions
+            else if (template.startsWith("{MATH ", pos)) {
+                int end = template.indexOf("}", pos);
+                if (end == -1) {
+                    result.append(template.charAt(pos));
+                    pos++;
+                    continue;
+                }
+                
+                String mathExpression = template.substring(pos + 6, end).trim();
+                double value = evaluateMathWithContext(mathExpression, matches, currentPattern, currentIndex);
+                
+                // Format the result nicely (remove .0 for whole numbers)
+                if (value == (long) value) {
+                    result.append(String.valueOf((long) value));
+                } else {
+                    result.append(String.valueOf(value));
+                }
+                
+                debugPrint("DEBUG MATH: Evaluated " + mathExpression + " = " + value);
+                
+                pos = end + 1;
+            }
             // Handle variables
             else if (template.startsWith("{", pos)) {
                 int end = template.indexOf("}", pos);
@@ -1275,7 +1341,95 @@ public class RegexEditorPanel extends BorderPane {
      * Checks if a word is a keyword or function name
      */
     private boolean isKeywordOrFunction(String word) {
-        return word.matches("abs|sqrt|pow|min|max|if|for");
+        return word.matches("abs|sqrt|pow|min|max|if|for|MATH|VAR");
+    }
+    
+    /**
+     * Evaluates a math expression that can contain pattern references and variables
+     */
+    private double evaluateMathWithContext(String expression, Map<String, List<MatchResult>> matches, 
+                                         String currentPattern, int currentIndex) {
+        try {
+            // Replace pattern references with their numeric values
+            String processedExpression = expression;
+            
+            // First handle current pattern references if we're in a loop
+            if (currentPattern != null && currentIndex >= 0) {
+                // Handle pattern.group(n) syntax for current loop pattern
+                Pattern groupPattern = Pattern.compile("\\b" + Pattern.quote(currentPattern) + "\\.group\\((\\d+)\\)");
+                Matcher groupMatcher = groupPattern.matcher(processedExpression);
+                StringBuffer sb = new StringBuffer();
+                
+                while (groupMatcher.find()) {
+                    int groupNum = Integer.parseInt(groupMatcher.group(1));
+                    List<MatchResult> patternMatches = matches.get(currentPattern);
+                    String replacement = "0";
+                    
+                    if (patternMatches != null && currentIndex < patternMatches.size()) {
+                        MatchResult match = patternMatches.get(currentIndex);
+                        if (groupNum <= match.groupCount()) {
+                            String groupValue = match.group(groupNum);
+                            replacement = groupValue != null ? groupValue : "0";
+                        }
+                    }
+                    
+                    groupMatcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+                }
+                groupMatcher.appendTail(sb);
+                processedExpression = sb.toString();
+            }
+            
+            // Find all pattern references in the expression
+            Pattern patternRef = Pattern.compile("\\b([a-zA-Z]\\w*)(?:\\[(\\d+)\\])?(?:\\.group\\((\\d+)\\))?");
+            Matcher matcher = patternRef.matcher(processedExpression);
+            
+            StringBuffer sb = new StringBuffer();
+            while (matcher.find()) {
+                String fullMatch = matcher.group();
+                String name = matcher.group(1);
+                String indexStr = matcher.group(2);
+                String groupStr = matcher.group(3);
+                
+                // Skip if it's a keyword or function
+                if (isKeywordOrFunction(name)) {
+                    matcher.appendReplacement(sb, matcher.group());
+                    continue;
+                }
+                
+                // Check if it's a variable first
+                if (templateVariables.containsKey(name) && indexStr == null && groupStr == null) {
+                    // It's a variable reference
+                    double value = templateVariables.get(name);
+                    matcher.appendReplacement(sb, String.valueOf(value));
+                }
+                // Check if it's a pattern reference
+                else if (matches.containsKey(name)) {
+                    // Get the value for this pattern reference
+                    String value = getPatternValue(name, indexStr, groupStr, matches);
+                    
+                    // Try to parse as number, otherwise use 0
+                    try {
+                        Double.parseDouble(value);
+                        matcher.appendReplacement(sb, Matcher.quoteReplacement(value));
+                    } catch (NumberFormatException e) {
+                        // If it's not a number, use the length of the string
+                        matcher.appendReplacement(sb, String.valueOf(value.length()));
+                    }
+                } else {
+                    // Not a pattern name or variable, keep as is
+                    matcher.appendReplacement(sb, matcher.group());
+                }
+            }
+            matcher.appendTail(sb);
+            processedExpression = sb.toString();
+            
+            // Evaluate the mathematical expression
+            return evaluateArithmetic(processedExpression);
+            
+        } catch (Exception e) {
+            // If evaluation fails, return 0
+            return 0;
+        }
     }
     
     /**
@@ -1754,6 +1908,17 @@ public class RegexEditorPanel extends BorderPane {
                 sb.append(match.group());
             }
             return sb.toString();
+        }
+        
+        // Check if it's a template variable
+        if (templateVariables.containsKey(variable)) {
+            double value = templateVariables.get(variable);
+            // Format the result nicely (remove .0 for whole numbers)
+            if (value == (long) value) {
+                return String.valueOf((long) value);
+            } else {
+                return String.valueOf(value);
+            }
         }
         
         return "{" + variable + "}";
@@ -2443,32 +2608,7 @@ public class RegexEditorPanel extends BorderPane {
             }
             return new SimpleStringProperty(patternsStr.toString());
         });
-        patternCol.setCellFactory(column -> {
-            return new TableCell<RegexTest, String>() {
-                @Override
-                protected void updateItem(String item, boolean empty) {
-                    super.updateItem(item, empty);
-                    
-                    if (empty || item == null) {
-                        setText(null);
-                        setStyle("");
-                    } else {
-                        setText(item);
-                        
-                        // Check if all patterns in this test are valid
-                        RegexTest test = getTableView().getItems().get(getIndex());
-                        boolean allValid = test.getPatterns().stream()
-                            .allMatch(p -> isValidRegex(p.getRegex()));
-                        
-                        if (allValid) {
-                            setStyle("-fx-background-color: #e8f5e9; -fx-text-fill: #2e7d32;");
-                        } else {
-                            setStyle("-fx-background-color: #ffebee; -fx-text-fill: #c62828;");
-                        }
-                    }
-                }
-            };
-        });
+        // No custom cell factory - use default plain text rendering
         patternCol.setPrefWidth(250);
         
         TableColumn<RegexTest, String> expectedCol = new TableColumn<>("Expected Output");
@@ -2476,6 +2616,9 @@ public class RegexEditorPanel extends BorderPane {
         expectedCol.setPrefWidth(200);
         
         testsTable.getColumns().addAll(nameCol, inputCol, patternCol, expectedCol);
+        
+        // Prevent extra empty column by setting column resize policy
+        testsTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         
         // Load tests
         testsList.clear();
@@ -2588,6 +2731,7 @@ public class RegexEditorPanel extends BorderPane {
         VBox content = new VBox(10);
         content.setPadding(new Insets(20));
         content.setPrefWidth(600);
+        content.setPrefHeight(700); // Increase height to avoid scroll bar
         
         // Test name
         TextField nameField = new TextField(existingTest != null ? existingTest.getName() : "");
@@ -2608,9 +2752,8 @@ public class RegexEditorPanel extends BorderPane {
             for (RegexTest.PatternEntry pattern : existingTest.getPatterns()) {
                 patternsList.add(new RegexTest.PatternEntry(pattern.getName(), pattern.getRegex()));
             }
-        } else {
-            patternsList.add(new RegexTest.PatternEntry("pattern1", ""));
         }
+        // Start with zero patterns - user can add them if needed
         
         // Create a holder for the validation function that will be initialized later
         final Runnable[] validateFieldsHolder = new Runnable[1];
@@ -2653,7 +2796,7 @@ public class RegexEditorPanel extends BorderPane {
                     super.cancelEdit();
                     setText(getItem());
                     setGraphic(null);
-                    updateStyle(getItem());
+                    setStyle(""); // Clear any validation styling when done editing
                 }
                 
                 @Override
@@ -2674,7 +2817,7 @@ public class RegexEditorPanel extends BorderPane {
                         } else {
                             setText(item);
                             setGraphic(null);
-                            updateStyle(item);
+                            setStyle(""); // Don't show validation colors when not editing
                         }
                     }
                 }
@@ -2744,21 +2887,25 @@ public class RegexEditorPanel extends BorderPane {
         HBox patternButtons = new HBox(5);
         Button addPatternBtn = new Button("Add Pattern");
         Button removePatternBtn = new Button("Remove Pattern");
-        removePatternBtn.setDisable(true);
+        removePatternBtn.setDisable(patternsList.isEmpty()); // Disable if no patterns exist
         
         addPatternBtn.setOnAction(e -> {
             patternsList.add(new RegexTest.PatternEntry("pattern" + (patternsList.size() + 1), ""));
+            removePatternBtn.setDisable(false); // Enable remove button when patterns exist
         });
         
         removePatternBtn.setOnAction(e -> {
             RegexTest.PatternEntry selected = patternsTable.getSelectionModel().getSelectedItem();
-            if (selected != null && patternsList.size() > 1) {
+            if (selected != null) {
                 patternsList.remove(selected);
+                if (patternsList.isEmpty()) {
+                    removePatternBtn.setDisable(true); // Disable when no patterns remain
+                }
             }
         });
         
         patternsTable.getSelectionModel().selectedItemProperty().addListener((obs, oldSel, newSel) -> {
-            removePatternBtn.setDisable(newSel == null || patternsList.size() <= 1);
+            removePatternBtn.setDisable(newSel == null || patternsList.isEmpty());
         });
         
         patternButtons.getChildren().addAll(addPatternBtn, removePatternBtn);
@@ -2783,11 +2930,7 @@ public class RegexEditorPanel extends BorderPane {
             new Label("Expected Output:"), expectedArea
         );
         
-        ScrollPane scrollPane = new ScrollPane(content);
-        scrollPane.setFitToWidth(true);
-        scrollPane.setPrefViewportHeight(600);
-        
-        dialog.getDialogPane().setContent(scrollPane);
+        dialog.getDialogPane().setContent(content);
         
         ButtonType saveButtonType = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
@@ -2800,10 +2943,12 @@ public class RegexEditorPanel extends BorderPane {
             boolean hasValidPattern = patternsList.stream()
                 .anyMatch(p -> !p.getName().trim().isEmpty() && !p.getRegex().trim().isEmpty() && isValidRegex(p.getRegex()));
             
+            // Allow tests without patterns - patterns are now completely optional
+            boolean patternRequirementMet = true; // Always allow saving without patterns
+            
             saveButton.setDisable(
                 nameField.getText().trim().isEmpty() ||
                 inputArea.getText().trim().isEmpty() ||
-                !hasValidPattern ||
                 templateArea.getText().trim().isEmpty() ||
                 expectedArea.getText().trim().isEmpty()
             );
@@ -2817,7 +2962,6 @@ public class RegexEditorPanel extends BorderPane {
         expectedArea.textProperty().addListener((obs, old, text) -> validateFields.run());
         patternsList.addListener((javafx.collections.ListChangeListener<RegexTest.PatternEntry>) change -> {
             validateFields.run();
-            patternsTable.refresh(); // Force refresh to update styling
         });
         
         validateFields.run();
@@ -2922,7 +3066,11 @@ public class RegexEditorPanel extends BorderPane {
             // Capture debug output
             debugLog.append("=== TEST: ").append(testCase.name).append(" ===\n");
             debugLog.append("Input: ").append(testCase.input).append("\n");
-            debugLog.append("Pattern: ").append(testCase.patternRegex).append("\n");
+            if (test.getPatterns().isEmpty()) {
+                debugLog.append("Patterns: None (template-only test)\n");
+            } else {
+                debugLog.append("Patterns: ").append(test.getPatterns().size()).append(" pattern(s) defined\n");
+            }
             debugLog.append("Template: ").append(testCase.template.replace("\n", "\\n")).append("\n\n");
             
             // Set up test
@@ -2939,23 +3087,27 @@ public class RegexEditorPanel extends BorderPane {
             Map<String, List<MatchResult>> matches = new HashMap<>();
             debugLog.append("=== PATTERN MATCHING ===\n");
             
-            for (RegexTest.PatternEntry patternEntry : test.getPatterns()) {
-                debugLog.append("\nPattern '").append(patternEntry.getName()).append("': ").append(patternEntry.getRegex()).append("\n");
-                Pattern pattern = Pattern.compile(patternEntry.getRegex());
-                Matcher matcher = pattern.matcher(test.getInput());
-                List<MatchResult> matchResults = new ArrayList<>();
-                
-                int matchCount = 0;
-                while (matcher.find()) {
-                    MatchResult matchResult = matcher.toMatchResult();
-                    matchResults.add(matchResult);
-                    debugLog.append("  Match ").append(matchCount++).append(": \"").append(matchResult.group()).append("\"\n");
-                    for (int i = 1; i <= matchResult.groupCount(); i++) {
-                        debugLog.append("    Group ").append(i).append(": \"").append(matchResult.group(i)).append("\"\n");
+            if (test.getPatterns().isEmpty()) {
+                debugLog.append("No patterns defined - template will be processed without pattern matching\n");
+            } else {
+                for (RegexTest.PatternEntry patternEntry : test.getPatterns()) {
+                    debugLog.append("\nPattern '").append(patternEntry.getName()).append("': ").append(patternEntry.getRegex()).append("\n");
+                    Pattern pattern = Pattern.compile(patternEntry.getRegex());
+                    Matcher matcher = pattern.matcher(test.getInput());
+                    List<MatchResult> matchResults = new ArrayList<>();
+                    
+                    int matchCount = 0;
+                    while (matcher.find()) {
+                        MatchResult matchResult = matcher.toMatchResult();
+                        matchResults.add(matchResult);
+                        debugLog.append("  Match ").append(matchCount++).append(": \"").append(matchResult.group()).append("\"\n");
+                        for (int i = 1; i <= matchResult.groupCount(); i++) {
+                            debugLog.append("    Group ").append(i).append(": \"").append(matchResult.group(i)).append("\"\n");
+                        }
                     }
+                    matches.put(patternEntry.getName(), matchResults);
+                    debugLog.append("  Total matches for '").append(patternEntry.getName()).append("': ").append(matchResults.size()).append("\n");
                 }
-                matches.put(patternEntry.getName(), matchResults);
-                debugLog.append("  Total matches for '").append(patternEntry.getName()).append("': ").append(matchResults.size()).append("\n");
             }
             debugLog.append("\n");
             
