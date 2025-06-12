@@ -881,8 +881,19 @@ public class RegexEditorPanel extends BorderPane {
         String inputText = inputTextArea.getText();
         String template = templateArea.getText();
         
-        if (inputText.isEmpty() || template.isEmpty()) {
-            showAlert("Please provide both input text and template");
+        if (template.isEmpty()) {
+            showAlert("Please provide a template");
+            return;
+        }
+        
+        // Check if template has MATH/VAR blocks that don't require input
+        boolean hasStandaloneMathVar = template.contains("{MATH ") || template.contains("{VAR ");
+        boolean hasPatternDependentCommands = template.contains("{for ") || template.contains("{if ") || 
+                                            template.matches(".*\\{[^{}]*\\.(group|length)\\([^}]*\\}.*");
+        
+        // Only require input if template has pattern-dependent commands
+        if (inputText.isEmpty() && hasPatternDependentCommands && !hasStandaloneMathVar) {
+            showAlert("Please provide input text for pattern-based templates");
             return;
         }
         
@@ -2391,10 +2402,12 @@ public class RegexEditorPanel extends BorderPane {
         // 2. /for
         // 3. if condition
         // 4. /if
-        // 5. pattern_name
-        // 6. pattern_name[index]
-        // 7. pattern_name.group(n)
-        // 8. pattern_name[index].group(n)
+        // 5. MATH expression
+        // 6. VAR name = expression
+        // 7. pattern_name
+        // 8. pattern_name[index]
+        // 9. pattern_name.group(n)
+        // 10. pattern_name[index].group(n)
         
         // Check for loop commands
         if (command.equals("/for")) {
@@ -2414,6 +2427,18 @@ public class RegexEditorPanel extends BorderPane {
         if (command.startsWith("if ")) {
             // For now, we'll consider any if condition as valid
             // More sophisticated validation could be added here
+            return true;
+        }
+        
+        // Check for MATH commands
+        if (command.startsWith("MATH ")) {
+            // Any mathematical expression is considered valid
+            return true;
+        }
+        
+        // Check for VAR commands
+        if (command.startsWith("VAR ")) {
+            // Any variable assignment is considered valid
             return true;
         }
         
