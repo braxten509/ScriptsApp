@@ -9,11 +9,15 @@ import javafx.beans.property.SimpleStringProperty;
 import java.util.regex.*;
 import java.util.*;
 import java.io.*;
+import java.util.Arrays;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.control.TableCell;
 import javafx.util.Callback;
 import javafx.geometry.Pos;
 import com.doterra.app.model.RegexTemplate;
+import com.doterra.app.model.RegexTest;
+import com.doterra.app.model.RegexTestManager;
 import com.doterra.app.util.DialogUtil;
 import java.io.*;
 import javafx.util.StringConverter;
@@ -48,8 +52,13 @@ import javafx.scene.control.MenuItem;
 import javafx.scene.control.TableRow;
 import javafx.scene.web.WebView;
 import javafx.scene.web.WebEngine;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.Separator;
+import javafx.geometry.Orientation;
 import javafx.concurrent.Worker;
 import netscape.javascript.JSObject;
+import javafx.scene.input.KeyCode;
 
 public class RegexEditorPanel extends BorderPane {
     private static final String TEMPLATES_FILE = "data/regex_templates.dat";
@@ -69,10 +78,16 @@ public class RegexEditorPanel extends BorderPane {
     private Stage popOutWindow;
     private CheckBox showNoMatchesCheckBox;
     private CheckBox debugOutputCheckBox;
+    private RegexTestManager testManager;
+    private TableView<RegexTest> testsTable;
+    private ObservableList<RegexTest> testsList;
     
     public RegexEditorPanel() {
         patterns = FXCollections.observableArrayList();
         templates = new ArrayList<>();
+        testManager = new RegexTestManager();
+        testsList = FXCollections.observableArrayList();
+        testsList.addAll(testManager.getTests());
         loadTemplates();
         loadPreferences();
         setupUI();
@@ -225,12 +240,12 @@ public class RegexEditorPanel extends BorderPane {
         helpBtn.setStyle("-fx-font-size: 12px; -fx-padding: 2 6 2 6;");
         helpBtn.setOnAction(e -> showHelpDialog());
         
-        Button runTestsBtn = new Button("Run Tests");
-        runTestsBtn.setStyle("-fx-font-size: 12px; -fx-padding: 2 6 2 6;");
-        runTestsBtn.setOnAction(e -> runMathTests());
-        runTestsBtn.setTooltip(new Tooltip("Run comprehensive math function tests"));
+        Button manageTestsBtn = new Button("Tests");
+        manageTestsBtn.setStyle("-fx-font-size: 12px; -fx-padding: 2 6 2 6;");
+        manageTestsBtn.setOnAction(e -> showTestsDialog());
+        manageTestsBtn.setTooltip(new Tooltip("Manage and run tests"));
         
-        templateHeader.getChildren().addAll(templateTextLabel, helpBtn, runTestsBtn);
+        templateHeader.getChildren().addAll(templateTextLabel, helpBtn, manageTestsBtn);
         templateHeader.setAlignment(Pos.CENTER_LEFT);
         
         templateArea = new CodeArea();
@@ -2338,7 +2353,7 @@ public class RegexEditorPanel extends BorderPane {
         return remainder.isEmpty();
     }
     
-    // Test case data structure
+    // Test case data structure (kept for compatibility with existing test result display)
     private static class TestCase {
         final String name;
         final String input;
@@ -2375,10 +2390,478 @@ public class RegexEditorPanel extends BorderPane {
     }
     
     /**
-     * Runs comprehensive math function tests
+     * Shows the test management dialog
      */
-    private void runMathTests() {
-        List<TestCase> testCases = createTestCases();
+    private void showTestsDialog() {
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle("Regex Tests Manager");
+        dialog.setHeaderText("Manage and run regex tests");
+        
+        DialogUtil.configureDialog(dialog);
+        
+        VBox content = new VBox(10);
+        content.setPadding(new Insets(15));
+        content.setPrefWidth(900);
+        content.setPrefHeight(600);
+        
+        // Test management buttons
+        HBox buttonBar = new HBox(10);
+        Button addBtn = new Button("Add Test");
+        Button editBtn = new Button("Edit");
+        Button deleteBtn = new Button("Delete");
+        Button duplicateBtn = new Button("Duplicate");
+        Button runSelectedBtn = new Button("Run Selected");
+        Button runAllBtn = new Button("Run All");
+        
+        editBtn.setDisable(true);
+        deleteBtn.setDisable(true);
+        duplicateBtn.setDisable(true);
+        runSelectedBtn.setDisable(true);
+        
+        buttonBar.getChildren().addAll(addBtn, editBtn, deleteBtn, duplicateBtn, 
+                                       new Separator(Orientation.VERTICAL),
+                                       runSelectedBtn, runAllBtn);
+        
+        // Tests table
+        testsTable = new TableView<>();
+        testsTable.setPrefHeight(400);
+        
+        TableColumn<RegexTest, String> nameCol = new TableColumn<>("Test Name");
+        nameCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getName()));
+        nameCol.setPrefWidth(200);
+        
+        TableColumn<RegexTest, String> inputCol = new TableColumn<>("Input");
+        inputCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getInput()));
+        inputCol.setPrefWidth(200);
+        
+        TableColumn<RegexTest, String> patternCol = new TableColumn<>("Patterns");
+        patternCol.setCellValueFactory(data -> {
+            StringBuilder patternsStr = new StringBuilder();
+            for (RegexTest.PatternEntry pattern : data.getValue().getPatterns()) {
+                if (patternsStr.length() > 0) patternsStr.append("; ");
+                patternsStr.append(pattern.getName()).append(": ").append(pattern.getRegex());
+            }
+            return new SimpleStringProperty(patternsStr.toString());
+        });
+        patternCol.setCellFactory(column -> {
+            return new TableCell<RegexTest, String>() {
+                @Override
+                protected void updateItem(String item, boolean empty) {
+                    super.updateItem(item, empty);
+                    
+                    if (empty || item == null) {
+                        setText(null);
+                        setStyle("");
+                    } else {
+                        setText(item);
+                        
+                        // Check if all patterns in this test are valid
+                        RegexTest test = getTableView().getItems().get(getIndex());
+                        boolean allValid = test.getPatterns().stream()
+                            .allMatch(p -> isValidRegex(p.getRegex()));
+                        
+                        if (allValid) {
+                            setStyle("-fx-background-color: #e8f5e9; -fx-text-fill: #2e7d32;");
+                        } else {
+                            setStyle("-fx-background-color: #ffebee; -fx-text-fill: #c62828;");
+                        }
+                    }
+                }
+            };
+        });
+        patternCol.setPrefWidth(250);
+        
+        TableColumn<RegexTest, String> expectedCol = new TableColumn<>("Expected Output");
+        expectedCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getExpectedOutput()));
+        expectedCol.setPrefWidth(200);
+        
+        testsTable.getColumns().addAll(nameCol, inputCol, patternCol, expectedCol);
+        
+        // Load tests
+        testsList.clear();
+        testsList.addAll(testManager.getTests());
+        testsTable.setItems(testsList);
+        
+        // Enable/disable buttons based on selection
+        testsTable.getSelectionModel().selectedItemProperty().addListener((obs, oldSel, newSel) -> {
+            boolean hasSelection = newSel != null;
+            editBtn.setDisable(!hasSelection);
+            deleteBtn.setDisable(!hasSelection);
+            duplicateBtn.setDisable(!hasSelection);
+            runSelectedBtn.setDisable(!hasSelection);
+        });
+        
+        // Button actions
+        addBtn.setOnAction(e -> {
+            RegexTest newTest = showTestEditDialog(null);
+            if (newTest != null) {
+                testManager.addTest(newTest);
+                testsList.add(newTest);
+            }
+        });
+        
+        editBtn.setOnAction(e -> {
+            RegexTest selected = testsTable.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                RegexTest edited = showTestEditDialog(selected);
+                if (edited != null) {
+                    testManager.updateTest(selected.getId(), edited);
+                    int index = testsList.indexOf(selected);
+                    testsList.set(index, edited);
+                }
+            }
+        });
+        
+        deleteBtn.setOnAction(e -> {
+            RegexTest selected = testsTable.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+                confirm.setTitle("Delete Test");
+                confirm.setHeaderText("Delete test: " + selected.getName() + "?");
+                confirm.setContentText("This action cannot be undone.");
+                DialogUtil.configureDialog(confirm);
+                
+                if (confirm.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
+                    testManager.deleteTest(selected.getId());
+                    testsList.remove(selected);
+                }
+            }
+        });
+        
+        duplicateBtn.setOnAction(e -> {
+            RegexTest selected = testsTable.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                RegexTest copy = selected.copy();
+                testManager.addTest(copy);
+                testsList.add(copy);
+            }
+        });
+        
+        runSelectedBtn.setOnAction(e -> {
+            RegexTest selected = testsTable.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                runTests(Arrays.asList(selected));
+            }
+        });
+        
+        runAllBtn.setOnAction(e -> {
+            if (!testsList.isEmpty()) {
+                runTests(new ArrayList<>(testsList));
+            }
+        });
+        
+        // Add double-click to edit
+        testsTable.setRowFactory(tv -> {
+            TableRow<RegexTest> row = new TableRow<>();
+            row.setOnMouseClicked(event -> {
+                if (event.getClickCount() == 2 && !row.isEmpty()) {
+                    RegexTest test = row.getItem();
+                    RegexTest edited = showTestEditDialog(test);
+                    if (edited != null) {
+                        testManager.updateTest(test.getId(), edited);
+                        int index = testsList.indexOf(test);
+                        testsList.set(index, edited);
+                    }
+                }
+            });
+            return row;
+        });
+        
+        content.getChildren().addAll(buttonBar, testsTable);
+        
+        dialog.getDialogPane().setContent(content);
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        
+        dialog.showAndWait();
+    }
+    
+    /**
+     * Shows dialog to add/edit a test
+     */
+    private RegexTest showTestEditDialog(RegexTest existingTest) {
+        Dialog<RegexTest> dialog = new Dialog<>();
+        dialog.setTitle(existingTest == null ? "Add New Test" : "Edit Test");
+        dialog.setHeaderText(null);
+        
+        DialogUtil.configureDialog(dialog);
+        
+        VBox content = new VBox(10);
+        content.setPadding(new Insets(20));
+        content.setPrefWidth(600);
+        
+        // Test name
+        TextField nameField = new TextField(existingTest != null ? existingTest.getName() : "");
+        nameField.setPrefWidth(400);
+        
+        // Input text
+        TextArea inputArea = new TextArea(existingTest != null ? existingTest.getInput() : "");
+        inputArea.setPrefRowCount(3);
+        inputArea.setWrapText(true);
+        
+        // Patterns section
+        VBox patternsSection = new VBox(5);
+        Label patternsLabel = new Label("Patterns:");
+        
+        // Pattern list
+        ObservableList<RegexTest.PatternEntry> patternsList = FXCollections.observableArrayList();
+        if (existingTest != null && !existingTest.getPatterns().isEmpty()) {
+            for (RegexTest.PatternEntry pattern : existingTest.getPatterns()) {
+                patternsList.add(new RegexTest.PatternEntry(pattern.getName(), pattern.getRegex()));
+            }
+        } else {
+            patternsList.add(new RegexTest.PatternEntry("pattern1", ""));
+        }
+        
+        // Create a holder for the validation function that will be initialized later
+        final Runnable[] validateFieldsHolder = new Runnable[1];
+        
+        TableView<RegexTest.PatternEntry> patternsTable = new TableView<>(patternsList);
+        patternsTable.setPrefHeight(150);
+        patternsTable.setEditable(true);
+        
+        TableColumn<RegexTest.PatternEntry, String> patternNameCol = new TableColumn<>("Name");
+        patternNameCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getName()));
+        patternNameCol.setCellFactory(TextFieldTableCell.forTableColumn());
+        patternNameCol.setOnEditCommit(event -> {
+            event.getRowValue().setName(event.getNewValue());
+            if (validateFieldsHolder[0] != null) {
+                validateFieldsHolder[0].run();
+            }
+        });
+        patternNameCol.setPrefWidth(150);
+        
+        TableColumn<RegexTest.PatternEntry, String> patternRegexCol = new TableColumn<>("Regex");
+        patternRegexCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getRegex()));
+        patternRegexCol.setCellFactory(column -> {
+            return new TableCell<RegexTest.PatternEntry, String>() {
+                private TextField textField;
+                
+                @Override
+                public void startEdit() {
+                    super.startEdit();
+                    if (textField == null) {
+                        createTextField();
+                    }
+                    setText(null);
+                    setGraphic(textField);
+                    textField.selectAll();
+                    textField.requestFocus();
+                }
+                
+                @Override
+                public void cancelEdit() {
+                    super.cancelEdit();
+                    setText(getItem());
+                    setGraphic(null);
+                    updateStyle(getItem());
+                }
+                
+                @Override
+                protected void updateItem(String item, boolean empty) {
+                    super.updateItem(item, empty);
+                    
+                    if (empty || item == null) {
+                        setText(null);
+                        setGraphic(null);
+                        setStyle("");
+                    } else {
+                        if (isEditing()) {
+                            if (textField != null) {
+                                textField.setText(item);
+                            }
+                            setText(null);
+                            setGraphic(textField);
+                        } else {
+                            setText(item);
+                            setGraphic(null);
+                            updateStyle(item);
+                        }
+                    }
+                }
+                
+                private void createTextField() {
+                    textField = new TextField(getItem());
+                    textField.setOnKeyPressed(event -> {
+                        if (event.getCode() == javafx.scene.input.KeyCode.ENTER) {
+                            commitEdit(textField.getText());
+                            event.consume();
+                        } else if (event.getCode() == javafx.scene.input.KeyCode.ESCAPE) {
+                            cancelEdit();
+                            event.consume();
+                        }
+                    });
+                    
+                    // Real-time validation while typing
+                    textField.textProperty().addListener((obs, oldText, newText) -> {
+                        if (isValidRegex(newText)) {
+                            textField.setStyle("-fx-control-inner-background: #e8f5e9; -fx-border-color: #4caf50; -fx-border-width: 1px;");
+                        } else {
+                            textField.setStyle("-fx-control-inner-background: #ffebee; -fx-border-color: #f44336; -fx-border-width: 1px;");
+                        }
+                    });
+                    
+                    textField.focusedProperty().addListener((obs, wasFocused, isNowFocused) -> {
+                        if (!isNowFocused) {
+                            commitEdit(textField.getText());
+                        }
+                    });
+                }
+                
+                private void updateStyle(String regex) {
+                    if (regex == null || regex.trim().isEmpty()) {
+                        setStyle("");
+                    } else if (isValidRegex(regex)) {
+                        setStyle("-fx-background-color: #e8f5e9; -fx-text-fill: #2e7d32;");
+                    } else {
+                        setStyle("-fx-background-color: #ffebee; -fx-text-fill: #c62828;");
+                    }
+                }
+                
+                private boolean isValidRegex(String regex) {
+                    if (regex == null || regex.trim().isEmpty()) {
+                        return true; // Empty is considered valid (not yet entered)
+                    }
+                    try {
+                        Pattern.compile(regex);
+                        return true;
+                    } catch (PatternSyntaxException e) {
+                        return false;
+                    }
+                }
+            };
+        });
+        patternRegexCol.setOnEditCommit(event -> {
+            event.getRowValue().setRegex(event.getNewValue());
+            if (validateFieldsHolder[0] != null) {
+                validateFieldsHolder[0].run();
+            }
+        });
+        patternRegexCol.setPrefWidth(400);
+        
+        patternsTable.getColumns().addAll(patternNameCol, patternRegexCol);
+        
+        // Pattern buttons
+        HBox patternButtons = new HBox(5);
+        Button addPatternBtn = new Button("Add Pattern");
+        Button removePatternBtn = new Button("Remove Pattern");
+        removePatternBtn.setDisable(true);
+        
+        addPatternBtn.setOnAction(e -> {
+            patternsList.add(new RegexTest.PatternEntry("pattern" + (patternsList.size() + 1), ""));
+        });
+        
+        removePatternBtn.setOnAction(e -> {
+            RegexTest.PatternEntry selected = patternsTable.getSelectionModel().getSelectedItem();
+            if (selected != null && patternsList.size() > 1) {
+                patternsList.remove(selected);
+            }
+        });
+        
+        patternsTable.getSelectionModel().selectedItemProperty().addListener((obs, oldSel, newSel) -> {
+            removePatternBtn.setDisable(newSel == null || patternsList.size() <= 1);
+        });
+        
+        patternButtons.getChildren().addAll(addPatternBtn, removePatternBtn);
+        patternsSection.getChildren().addAll(patternsLabel, patternsTable, patternButtons);
+        
+        // Template
+        TextArea templateArea = new TextArea(existingTest != null ? existingTest.getTemplate() : "");
+        templateArea.setPrefRowCount(5);
+        templateArea.setWrapText(true);
+        
+        // Expected output
+        TextArea expectedArea = new TextArea(existingTest != null ? existingTest.getExpectedOutput() : "");
+        expectedArea.setPrefRowCount(5);
+        expectedArea.setWrapText(true);
+        
+        // Add all components
+        content.getChildren().addAll(
+            new Label("Test Name:"), nameField,
+            new Label("Input Text:"), inputArea,
+            patternsSection,
+            new Label("Template:"), templateArea,
+            new Label("Expected Output:"), expectedArea
+        );
+        
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setPrefViewportHeight(600);
+        
+        dialog.getDialogPane().setContent(scrollPane);
+        
+        ButtonType saveButtonType = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
+        
+        // Enable/disable save button based on required fields
+        Node saveButton = dialog.getDialogPane().lookupButton(saveButtonType);
+        saveButton.setDisable(true);
+        
+        validateFieldsHolder[0] = () -> {
+            boolean hasValidPattern = patternsList.stream()
+                .anyMatch(p -> !p.getName().trim().isEmpty() && !p.getRegex().trim().isEmpty() && isValidRegex(p.getRegex()));
+            
+            saveButton.setDisable(
+                nameField.getText().trim().isEmpty() ||
+                inputArea.getText().trim().isEmpty() ||
+                !hasValidPattern ||
+                templateArea.getText().trim().isEmpty() ||
+                expectedArea.getText().trim().isEmpty()
+            );
+        };
+        
+        Runnable validateFields = validateFieldsHolder[0];
+        
+        nameField.textProperty().addListener((obs, old, text) -> validateFields.run());
+        inputArea.textProperty().addListener((obs, old, text) -> validateFields.run());
+        templateArea.textProperty().addListener((obs, old, text) -> validateFields.run());
+        expectedArea.textProperty().addListener((obs, old, text) -> validateFields.run());
+        patternsList.addListener((javafx.collections.ListChangeListener<RegexTest.PatternEntry>) change -> {
+            validateFields.run();
+            patternsTable.refresh(); // Force refresh to update styling
+        });
+        
+        validateFields.run();
+        
+        dialog.setResultConverter(dialogButton -> {
+            if (dialogButton == saveButtonType) {
+                // Filter out empty patterns
+                List<RegexTest.PatternEntry> validPatterns = new ArrayList<>();
+                for (RegexTest.PatternEntry pattern : patternsList) {
+                    if (!pattern.getName().trim().isEmpty() && !pattern.getRegex().trim().isEmpty()) {
+                        validPatterns.add(new RegexTest.PatternEntry(pattern.getName().trim(), pattern.getRegex().trim()));
+                    }
+                }
+                
+                return new RegexTest(
+                    nameField.getText().trim(),
+                    inputArea.getText().trim(),
+                    validPatterns,
+                    templateArea.getText().trim(),
+                    expectedArea.getText().trim()
+                );
+            }
+            return null;
+        });
+        
+        return dialog.showAndWait().orElse(null);
+    }
+    
+    private boolean isValidRegex(String regex) {
+        if (regex == null || regex.trim().isEmpty()) {
+            return false;
+        }
+        try {
+            Pattern.compile(regex);
+            return true;
+        } catch (PatternSyntaxException e) {
+            return false;
+        }
+    }
+    
+    /**
+     * Runs the selected tests
+     */
+    private void runTests(List<RegexTest> testsToRun) {
         List<TestResult> results = new ArrayList<>();
         
         // Save current state
@@ -2386,13 +2869,16 @@ public class RegexEditorPanel extends BorderPane {
         String originalTemplate = templateArea.getText();
         ObservableList<PatternEntry> originalPatterns = FXCollections.observableArrayList(patterns);
         boolean originalDebugState = debugOutputCheckBox.isSelected();
+        boolean originalShowNoMatchesState = showNoMatchesCheckBox.isSelected();
         
         try {
-            // Enable debug output for detailed logging
+            // Enable debug output for detailed logging and ensure consistent "show no matches" state
             debugOutputCheckBox.setSelected(true);
+            // For tests, we want consistent behavior - don't show "no matches" indicators
+            showNoMatchesCheckBox.setSelected(false);
             
-            for (TestCase testCase : testCases) {
-                results.add(runSingleTest(testCase));
+            for (RegexTest test : testsToRun) {
+                results.add(runSingleTest(test));
             }
             
             // Show results dialog
@@ -2405,92 +2891,28 @@ public class RegexEditorPanel extends BorderPane {
             patterns.clear();
             patterns.addAll(originalPatterns);
             debugOutputCheckBox.setSelected(originalDebugState);
+            showNoMatchesCheckBox.setSelected(originalShowNoMatchesState);
         }
     }
     
-    /**
-     * Creates all test cases
-     */
-    private List<TestCase> createTestCases() {
-        List<TestCase> tests = new ArrayList<>();
-        
-        // Test 1: Basic Comparisons
-        tests.add(new TestCase(
-            "Basic Comparisons",
-            "Value: 50, Value: 120, Value: 8",
-            "values",
-            "Value: (\\d+)",
-            "{for values}\nValue: {values.group(1)}\n{if values.group(1) > 100} - High{/if}\n{if values.group(1) < 20} - Low{/if}\n{if values.group(1) >= 50 && values.group(1) <= 100} - Medium{/if}\n{/for}",
-            "Value: 50\n - Medium\n\nValue: 120\n - High\n\nValue: 8\n - Low"
-        ));
-        
-        // Test 2: Math Functions - abs()
-        tests.add(new TestCase(
-            "Math Functions - abs()",
-            "Temp: -15, Temp: 25, Temp: -5",
-            "temps",
-            "Temp: (-?\\d+)",
-            "{for temps}\nTemperature: {temps.group(1)}°C\n{if abs(temps.group(1)) < 10} - Mild{/if}\n{if abs(temps.group(1)) >= 20} - Extreme{/if}\n{/for}",
-            "Temperature: -15°C\n\nTemperature: 25°C\n - Extreme\n\nTemperature: -5°C\n - Mild"
-        ));
-        
-        // Test 3: Arithmetic Operations
-        tests.add(new TestCase(
-            "Arithmetic Operations",
-            "Score: 85, Score: 92, Score: 78",
-            "scores",
-            "Score: (\\d+)",
-            "{for scores}\nScore: {scores.group(1)}\n{if scores.group(1) + 10 > 90} - With bonus: above 90{/if}\n{if scores.group(1) * 2 > 180} - Doubled: above 180{/if}\n{if scores.group(1) / 2 < 45} - Halved: below 45{/if}\n{/for}",
-            "Score: 85\n - With bonus: above 90\n - Halved: below 45\n\nScore: 92\n - With bonus: above 90\n - Doubled: above 180\n\nScore: 78\n - Halved: below 45"
-        ));
-        
-        // Test 4: Complex Math with sqrt
-        tests.add(new TestCase(
-            "Complex Math with sqrt",
-            "Distance: 144, Distance: 25, Distance: 100",
-            "distances",
-            "Distance: (\\d+)",
-            "{for distances}\nDistance: {distances.group(1)}m\n{if sqrt(distances.group(1)) == 12} - Perfect square (√{distances.group(1)} = 12){/if}\n{if sqrt(distances.group(1)) < 10} - Short distance{/if}\n{if pow(distances.group(1), 0.5) == 10} - Square root is 10{/if}\n{/for}",
-            "Distance: 144m\n - Perfect square (√144 = 12)\n\nDistance: 25m\n - Short distance\n\nDistance: 100m\n - Square root is 10"
-        ));
-        
-        // Test 5: Min/Max Functions
-        tests.add(new TestCase(
-            "Min/Max Functions",
-            "Price: 45, Price: 85, Price: 65",
-            "prices",
-            "Price: (\\d+)",
-            "{for prices}\nPrice: ${prices.group(1)}\n{if min(prices.group(1), 60) == prices.group(1)} - At or below $60{/if}\n{if max(prices.group(1), 70) == prices.group(1)} - At or above $70{/if}\n{if abs(prices.group(1) - 65) < 5} - Close to $65{/if}\n{/for}",
-            "Price: $45\n - At or below $60\n\nPrice: $85\n - At or above $70\n\nPrice: $65\n - Close to $65"
-        ));
-        
-        // Test 6: Cross-Reference Between Matches
-        tests.add(new TestCase(
-            "Cross-Reference Between Matches",
-            "Item: 50, Item: 30, Item: 80",
-            "items",
-            "Item: (\\d+)",
-            "{if abs(items[0].group(1) - items[1].group(1)) > 15}First two items differ by more than 15\n{/if}{if items[2].group(1) > items[0].group(1) + items[1].group(1)}Third item is greater than sum of first two\n{/if}{if min(items[0].group(1), min(items[1].group(1), items[2].group(1))) < 40}At least one item is below 40{/if}",
-            "First two items differ by more than 15\nAt least one item is below 40"
-        ));
-        
-        // Test 7: Edge Cases with Zero and Negative
-        tests.add(new TestCase(
-            "Edge Cases with Zero and Negative",
-            "Value: 0, Value: -10, Value: 15",
-            "vals",
-            "Value: (-?\\d+)",
-            "{for vals}\nValue: {vals.group(1)}\n{if vals.group(1) == 0} - Zero value{/if}\n{if vals.group(1) < 0} - Negative{/if}\n{if abs(vals.group(1)) > 5} - Absolute value > 5{/if}\n{/for}",
-            "Value: 0\n - Zero value\n\nValue: -10\n - Negative\n - Absolute value > 5\n\nValue: 15\n - Absolute value > 5"
-        ));
-        
-        return tests;
-    }
     
     /**
      * Runs a single test case
      */
-    private TestResult runSingleTest(TestCase testCase) {
+    private TestResult runSingleTest(RegexTest test) {
+        // Create a TestCase wrapper for compatibility with existing code
+        // For now, use the first pattern for the TestCase (for display purposes)
+        String firstPatternName = test.getPatterns().isEmpty() ? "" : test.getPatterns().get(0).getName();
+        String firstPatternRegex = test.getPatterns().isEmpty() ? "" : test.getPatterns().get(0).getRegex();
+        
+        TestCase testCase = new TestCase(
+            test.getName(),
+            test.getInput(),
+            firstPatternName,
+            firstPatternRegex,
+            test.getTemplate(),
+            test.getExpectedOutput()
+        );
         StringBuilder debugLog = new StringBuilder();
         String actualOutput = "";
         String errorMessage = "";
@@ -2504,31 +2926,38 @@ public class RegexEditorPanel extends BorderPane {
             debugLog.append("Template: ").append(testCase.template.replace("\n", "\\n")).append("\n\n");
             
             // Set up test
-            inputTextArea.setText(testCase.input);
-            templateArea.replaceText(testCase.template);
+            inputTextArea.setText(test.getInput());
+            templateArea.replaceText(test.getTemplate());
             
-            // Clear and add pattern
+            // Clear and add all patterns
             patterns.clear();
-            patterns.add(new PatternEntry(testCase.patternName, testCase.patternRegex));
-            
-            // Process template and capture detailed debug info
-            Map<String, List<MatchResult>> matches = new HashMap<>();
-            Pattern pattern = Pattern.compile(testCase.patternRegex);
-            Matcher matcher = pattern.matcher(testCase.input);
-            List<MatchResult> matchResults = new ArrayList<>();
-            
-            debugLog.append("=== PATTERN MATCHING ===\n");
-            int matchCount = 0;
-            while (matcher.find()) {
-                MatchResult matchResult = matcher.toMatchResult();
-                matchResults.add(matchResult);
-                debugLog.append("Match ").append(matchCount++).append(": \"").append(matchResult.group()).append("\"\n");
-                for (int i = 1; i <= matchResult.groupCount(); i++) {
-                    debugLog.append("  Group ").append(i).append(": \"").append(matchResult.group(i)).append("\"\n");
-                }
+            for (RegexTest.PatternEntry patternEntry : test.getPatterns()) {
+                patterns.add(new PatternEntry(patternEntry.getName(), patternEntry.getRegex()));
             }
-            matches.put(testCase.patternName, matchResults);
-            debugLog.append("Total matches found: ").append(matchResults.size()).append("\n\n");
+            
+            // Process all patterns and capture detailed debug info
+            Map<String, List<MatchResult>> matches = new HashMap<>();
+            debugLog.append("=== PATTERN MATCHING ===\n");
+            
+            for (RegexTest.PatternEntry patternEntry : test.getPatterns()) {
+                debugLog.append("\nPattern '").append(patternEntry.getName()).append("': ").append(patternEntry.getRegex()).append("\n");
+                Pattern pattern = Pattern.compile(patternEntry.getRegex());
+                Matcher matcher = pattern.matcher(test.getInput());
+                List<MatchResult> matchResults = new ArrayList<>();
+                
+                int matchCount = 0;
+                while (matcher.find()) {
+                    MatchResult matchResult = matcher.toMatchResult();
+                    matchResults.add(matchResult);
+                    debugLog.append("  Match ").append(matchCount++).append(": \"").append(matchResult.group()).append("\"\n");
+                    for (int i = 1; i <= matchResult.groupCount(); i++) {
+                        debugLog.append("    Group ").append(i).append(": \"").append(matchResult.group(i)).append("\"\n");
+                    }
+                }
+                matches.put(patternEntry.getName(), matchResults);
+                debugLog.append("  Total matches for '").append(patternEntry.getName()).append("': ").append(matchResults.size()).append("\n");
+            }
+            debugLog.append("\n");
             
             // Get output with detailed debug tracing
             debugLog.append("=== TEMPLATE PROCESSING ===\n");
@@ -2925,7 +3354,7 @@ public class RegexEditorPanel extends BorderPane {
      */
     private void showTestResults(List<TestResult> results) {
         Dialog<Void> dialog = new Dialog<>();
-        dialog.setTitle("Math Function Test Results");
+        dialog.setTitle("Regex Test Results");
         dialog.setHeaderText(null);
         
         // Configure dialog to be independent and always on top
