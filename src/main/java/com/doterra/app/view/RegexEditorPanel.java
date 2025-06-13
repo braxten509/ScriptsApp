@@ -1163,6 +1163,12 @@ public class RegexEditorPanel extends BorderPane {
                 processVariableAssignment(varDeclaration, matches, currentPattern, currentIndex);
                 
                 pos = end + 1;
+                // Skip trailing newline after VAR block to make it completely invisible
+                if (pos < template.length() && template.charAt(pos) == '\n') {
+                    pos++;
+                } else if (pos < template.length() - 1 && template.charAt(pos) == '\r' && template.charAt(pos + 1) == '\n') {
+                    pos += 2;
+                }
             }
             // Handle math expressions
             else if (template.startsWith("{MATH ", pos)) {
@@ -2431,8 +2437,8 @@ public class RegexEditorPanel extends BorderPane {
             return true;
         }
         
-        // Check for variable references (stored in templateVariables)
-        if (isValidVariableName(command)) {
+        // Check for variable references (must exist in templateVariables)
+        if (isValidVariableName(command) && templateVariables.containsKey(command)) {
             return true;
         }
         
@@ -3429,6 +3435,12 @@ public class RegexEditorPanel extends BorderPane {
                 debugLog.append("Variable assignment completed\n");
                 
                 pos = end + 1;
+                // Skip trailing newline after VAR block to make it completely invisible
+                if (pos < template.length() && template.charAt(pos) == '\n') {
+                    pos++;
+                } else if (pos < template.length() - 1 && template.charAt(pos) == '\r' && template.charAt(pos + 1) == '\n') {
+                    pos += 2;
+                }
             }
             // Handle MATH expressions
             else if (template.startsWith("{MATH ", pos)) {
