@@ -695,4 +695,14 @@ public class CalendarPanel extends BorderPane {
             }
         });
     }
+    
+    /**
+     * Cleanup method to stop timers and remove listeners
+     */
+    public void cleanup() {
+        if (dailyRefreshTimer != null) {
+            dailyRefreshTimer.stop();
+            dailyRefreshTimer = null;
+        }
+    }
 }

@@ -146,4 +146,19 @@ public class NavigationController {
         }
         return todoPanel;
     }
+    
+    /**
+     * Cleanup all panels that have been created
+     */
+    public void cleanup() {
+        if (todoPanel != null) {
+            todoPanel.cleanup();
+        }
+        if (calendarPanel != null) {
+            calendarPanel.cleanup();
+        }
+        if (regexEditorPanel != null) {
+            regexEditorPanel.cleanup();
+        }
+    }
 }

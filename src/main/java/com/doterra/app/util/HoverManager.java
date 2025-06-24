@@ -5,6 +5,7 @@ import javafx.scene.effect.DropShadow;
 import javafx.scene.effect.BlurType;
 import javafx.scene.paint.Color;
 import javafx.scene.input.MouseEvent;
+import javafx.event.EventHandler;
 import java.util.WeakHashMap;
 
 public class HoverManager {

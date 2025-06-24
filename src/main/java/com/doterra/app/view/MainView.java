@@ -322,8 +322,7 @@ public class MainView {
         // Cleanup panels if they exist
         NavigationController navController = getNavigationController();
         if (navController != null) {
-            // These will be null if not loaded yet, which is fine
-            // No need to explicitly cleanup lazy-loaded panels
+            navController.cleanup();
         }
     }
 }

@@ -747,7 +747,7 @@ public class TodoPanel extends BorderPane {
         nameCol.setResizable(true);
         nameCol.setStyle("-fx-border-color: transparent #cccccc transparent transparent; -fx-border-width: 0 1 0 0;");
         nameCol.setCellValueFactory(cellData -> cellData.getValue().nameProperty());
-        nameCol.setCellFactory(column -> new EditableTextCell());
+        nameCol.setCellFactory(column -> new EditableTextCell(task -> task.nameProperty()));
         nameCol.setOnEditCommit(event -> {
             event.getRowValue().setName(event.getNewValue());
         });
@@ -759,7 +759,7 @@ public class TodoPanel extends BorderPane {
         idCol.setResizable(true);
         idCol.setStyle("-fx-border-color: transparent #cccccc transparent transparent; -fx-border-width: 0 1 0 0;");
         idCol.setCellValueFactory(cellData -> cellData.getValue().idProperty());
-        idCol.setCellFactory(column -> new EditableTextCell());
+        idCol.setCellFactory(column -> new EditableTextCell(task -> task.idProperty()));
         idCol.setOnEditCommit(event -> {
             event.getRowValue().setId(event.getNewValue());
         });
@@ -781,6 +781,9 @@ public class TodoPanel extends BorderPane {
                 // Initialize layout once
                 hbox.setAlignment(Pos.CENTER);
                 hbox.getChildren().addAll(label, button);
+                
+                // Ensure button has black text
+                button.setStyle("-fx-text-fill: black;");
                 
                 button.setOnAction(e -> {
                     if (getIndex() >= 0 && getIndex() < getTableView().getItems().size()) {
@@ -851,6 +854,9 @@ public class TodoPanel extends BorderPane {
         // Use CONSTRAINED_RESIZE_POLICY to make the table stretch to fill available width
         activeTasksTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
         
+        // Ensure all table text is black
+        activeTasksTable.setStyle("-fx-text-fill: black;");
+        
         // Enable row selection
         activeTasksTable.getSelectionModel().setSelectionMode(SelectionMode.SINGLE);
         
@@ -870,9 +876,9 @@ public class TodoPanel extends BorderPane {
             // Check if any task has expanded details
             for (TodoTask task : activeTasks) {
                 if (task.isDetailsExpanded()) {
-                    // Check if the click was on a TextArea (expanded details) - if so, don't collapse
-                    if (source instanceof TextArea) {
-                        System.out.println("DEBUG: Click on TextArea - not collapsing");
+                    // Check if the click was on or inside a TextArea (expanded details) - if so, don't collapse
+                    if (isClickInsideTextArea(source)) {
+                        System.out.println("DEBUG: Click inside TextArea - not collapsing");
                         return;
                     }
                     
@@ -887,6 +893,24 @@ public class TodoPanel extends BorderPane {
                 }
             }
         });
+    }
+    
+    /**
+     * Helper method to check if a click target is inside any TextArea
+     */
+    private boolean isClickInsideTextArea(Object target) {
+        if (!(target instanceof javafx.scene.Node)) {
+            return false;
+        }
+        
+        javafx.scene.Node current = (javafx.scene.Node) target;
+        while (current != null) {
+            if (current instanceof TextArea) {
+                return true;
+            }
+            current = current.getParent();
+        }
+        return false;
     }
     
     private void setupRowDragAndDrop() {
@@ -1152,7 +1176,7 @@ public class TodoPanel extends BorderPane {
                 
                 // Apply color to the combo box based on status
                 Color color = status.getColor();
-                String colorStyle = String.format("-fx-background-color: %s; -fx-text-fill: white; -fx-font-weight: bold;",
+                String colorStyle = String.format("-fx-background-color: %s; -fx-text-fill: black; -fx-font-weight: bold;",
                     toHexString(color));
                 comboBox.setStyle(colorStyle);
                 
@@ -1200,15 +1224,39 @@ public class TodoPanel extends BorderPane {
             // Add double-click handler to expand/collapse with event filtering
             addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, event -> {
                 if (event.getClickCount() == 2 && !isEmpty()) {
+                    // Check if the click is inside the TextArea when expanded
+                    if (currentTextArea != null && event.getTarget() instanceof javafx.scene.Node) {
+                        javafx.scene.Node target = (javafx.scene.Node) event.getTarget();
+                        if (isNodeInsideTextArea(target)) {
+                            // Click is inside TextArea, don't toggle
+                            return;
+                        }
+                    }
                     System.out.println("DEBUG: Double-click FILTER PRESSED detected on Details cell, index=" + getIndex());
                     event.consume();
                     toggleExpanded();
+                }
+                // For single clicks, also check if we're clicking inside the TextArea
+                else if (event.getClickCount() == 1 && currentTextArea != null && event.getTarget() instanceof javafx.scene.Node) {
+                    javafx.scene.Node target = (javafx.scene.Node) event.getTarget();
+                    if (isNodeInsideTextArea(target)) {
+                        // Let clicks inside TextArea go through normally
+                        return;
+                    }
                 }
                 // Don't consume single clicks - let them through for cell selection
             });
             
             addEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, event -> {
                 if (event.getClickCount() == 2 && !isEmpty()) {
+                    // Check if the click is inside the TextArea when expanded
+                    if (currentTextArea != null && event.getTarget() instanceof javafx.scene.Node) {
+                        javafx.scene.Node target = (javafx.scene.Node) event.getTarget();
+                        if (isNodeInsideTextArea(target)) {
+                            // Click is inside TextArea, don't toggle
+                            return;
+                        }
+                    }
                     System.out.println("DEBUG: Double-click FILTER CLICKED detected on Details cell, index=" + getIndex());
                     event.consume();
                     // Additional handling in case pressed didn't work
@@ -1226,8 +1274,31 @@ public class TodoPanel extends BorderPane {
                         }
                     });
                 }
+                // For single clicks, also check if we're clicking inside the TextArea
+                else if (event.getClickCount() == 1 && currentTextArea != null && event.getTarget() instanceof javafx.scene.Node) {
+                    javafx.scene.Node target = (javafx.scene.Node) event.getTarget();
+                    if (isNodeInsideTextArea(target)) {
+                        // Let clicks inside TextArea go through normally
+                        return;
+                    }
+                }
                 // Don't consume single clicks - let them through for cell selection
             });
+        }
+        
+        private boolean isNodeInsideTextArea(javafx.scene.Node node) {
+            if (currentTextArea == null) {
+                return false;
+            }
+            // Check if the node is the TextArea itself or a child of it
+            javafx.scene.Node current = node;
+            while (current != null) {
+                if (current == currentTextArea) {
+                    return true;
+                }
+                current = current.getParent();
+            }
+            return false;
         }
         
         private void toggleExpanded() {
@@ -1317,6 +1388,19 @@ public class TodoPanel extends BorderPane {
                     }
                 });
                 
+                // Prevent mouse events from bubbling up to the cell when inside TextArea
+                currentTextArea.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, event -> {
+                    event.consume(); // Stop the event from reaching the cell
+                });
+                
+                currentTextArea.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, event -> {
+                    event.consume(); // Stop the event from reaching the cell
+                });
+                
+                currentTextArea.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_RELEASED, event -> {
+                    event.consume(); // Stop the event from reaching the cell
+                });
+                
                 setGraphic(currentTextArea);
                 setText(null);
                 setPrefHeight(85);
@@ -1336,13 +1420,18 @@ public class TodoPanel extends BorderPane {
         
         private void createTextField() {
             textField = new TextField(getString());
-            textField.setStyle("-fx-border-width: 0; -fx-background-color: transparent; -fx-text-alignment: center;");
+            textField.setStyle("-fx-border-width: 0; -fx-background-color: transparent; -fx-alignment: center;");
             textField.setAlignment(Pos.CENTER);
-            textField.setMinWidth(this.getWidth() - this.getGraphicTextGap() * 2);
+            textField.setPrefWidth(this.getWidth() - this.getGraphicTextGap() * 2);
             
-            // Ensure centering works for new text input
+            // Save on every keystroke
             textField.textProperty().addListener((obs, oldText, newText) -> {
-                textField.setAlignment(Pos.CENTER);
+                if (getIndex() >= 0 && getTableView() != null) {
+                    TodoTask task = getTableView().getItems().get(getIndex());
+                    if (task != null) {
+                        task.setDescription(newText);
+                    }
+                }
             });
             
             textField.setOnAction(event -> commitEdit(textField.getText()));
@@ -1374,8 +1463,10 @@ public class TodoPanel extends BorderPane {
     // Custom text cell that doesn't show borders and centers text
     private static class EditableTextCell extends TableCell<TodoTask, String> {
         private TextField textField;
+        private final java.util.function.Function<TodoTask, StringProperty> propertyExtractor;
         
-        public EditableTextCell() {
+        public EditableTextCell(java.util.function.Function<TodoTask, StringProperty> propertyExtractor) {
+            this.propertyExtractor = propertyExtractor;
             setAlignment(Pos.CENTER);
             setStyle("-fx-border-width: 0; -fx-background-color: transparent;");
         }
@@ -1386,6 +1477,7 @@ public class TodoPanel extends BorderPane {
             if (textField == null) {
                 createTextField();
             }
+            setText(null);
             setGraphic(textField);
             textField.selectAll();
             textField.requestFocus();
@@ -1423,13 +1515,18 @@ public class TodoPanel extends BorderPane {
         
         private void createTextField() {
             textField = new TextField(getString());
-            textField.setStyle("-fx-border-width: 0; -fx-background-color: transparent; -fx-text-alignment: center;");
+            textField.setStyle("-fx-border-width: 0; -fx-background-color: transparent; -fx-alignment: center;");
             textField.setAlignment(Pos.CENTER);
-            textField.setMinWidth(this.getWidth() - this.getGraphicTextGap() * 2);
+            textField.setPrefWidth(this.getWidth() - this.getGraphicTextGap() * 2);
             
-            // Ensure centering works for new text input
+            // Save on every keystroke
             textField.textProperty().addListener((obs, oldText, newText) -> {
-                textField.setAlignment(Pos.CENTER);
+                if (getIndex() >= 0 && getTableView() != null) {
+                    TodoTask task = getTableView().getItems().get(getIndex());
+                    if (task != null && propertyExtractor != null) {
+                        propertyExtractor.apply(task).set(newText);
+                    }
+                }
             });
             
             textField.setOnAction(event -> commitEdit(textField.getText()));
@@ -1540,6 +1637,9 @@ public class TodoPanel extends BorderPane {
         
         // Use CONSTRAINED_RESIZE_POLICY to make the table stretch to fill available width
         completedTasksTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        
+        // Ensure all table text is black
+        completedTasksTable.setStyle("-fx-text-fill: black;");
         
         // Apply saved column widths
         applyColumnWidths(completedTasksTable, loadedCompletedColumnWidths);
@@ -1688,5 +1788,15 @@ public class TodoPanel extends BorderPane {
      */
     public javafx.collections.ObservableList<TodoTask> getActiveTasks() {
         return activeTasks;
+    }
+    
+    /**
+     * Cleanup method to stop timers and remove listeners
+     */
+    public void cleanup() {
+        if (waitUntilChecker != null) {
+            waitUntilChecker.stop();
+            waitUntilChecker = null;
+        }
     }
 }

@@ -10,6 +10,8 @@ import java.util.regex.*;
 import java.util.*;
 import java.io.*;
 import java.util.Arrays;
+import javafx.animation.PauseTransition;
+import javafx.util.Duration;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.control.TableCell;
@@ -82,12 +84,21 @@ public class RegexEditorPanel extends BorderPane {
     private TableView<RegexTest> testsTable;
     private ObservableList<RegexTest> testsList;
     private Map<String, Double> templateVariables;
+    private PauseTransition validationPause;
     
     public RegexEditorPanel() {
         patterns = FXCollections.observableArrayList();
         templates = new ArrayList<>();
         testManager = new RegexTestManager();
         testsList = FXCollections.observableArrayList();
+        
+        // Initialize validation debouncer
+        validationPause = new PauseTransition(Duration.millis(300));
+        validationPause.setOnFinished(e -> {
+            if (templateArea != null) {
+                validateTemplateSyntax(templateArea.getText());
+            }
+        });
         testsList.addAll(testManager.getTests());
         templateVariables = new HashMap<>();
         loadTemplates();
@@ -256,9 +267,10 @@ public class RegexEditorPanel extends BorderPane {
         // CodeArea will show existing content properly
         VBox.setVgrow(templateArea, Priority.ALWAYS);
         
-        // Add real-time validation for template syntax
+        // Add real-time validation for template syntax with debouncing
         templateArea.textProperty().addListener((obs, oldText, newText) -> {
-            validateTemplateSyntax(newText);
+            validationPause.stop();
+            validationPause.play();
         });
         
         // Style the template area to match other text areas
@@ -813,6 +825,12 @@ public class RegexEditorPanel extends BorderPane {
             new HelpEntry("{variable_name}", "Shows stored variable value"),
             new HelpEntry("{MATH var1 + var2}", "Math expressions can use variables"),
             new HelpEntry("{VAR total = price * (1 + tax)}", "Variables can reference patterns and other variables"),
+            new HelpEntry("{VAR counter++}", "Increment variable by 1 (post-increment)"),
+            new HelpEntry("{VAR counter--}", "Decrement variable by 1 (post-decrement)"),
+            new HelpEntry("{VAR total += amount}", "Add value to variable (total = total + amount)"),
+            new HelpEntry("{VAR total -= discount}", "Subtract value from variable (total = total - discount)"),
+            new HelpEntry("{VAR price *= tax_rate}", "Multiply variable by value (price = price * tax_rate)"),
+            new HelpEntry("{VAR price /= quantity}", "Divide variable by value (price = price / quantity)"),
             new HelpEntry("Math operations", "+ - * / % supported in conditions and MATH/VAR"),
             new HelpEntry("Comparisons", "< > <= >= == != supported"),
             new HelpEntry("Math functions", "abs(), sqrt(), pow(x,y), min(x,y), max(x,y)")
@@ -843,7 +861,18 @@ public class RegexEditorPanel extends BorderPane {
                           "Template:\n" +
                           "{VAR radius = 5}\n" +
                           "Area: {MATH 3.14159 * pow(radius, 2)}\n" +
-                          "Circumference: {MATH 2 * 3.14159 * radius}");
+                          "Circumference: {MATH 2 * 3.14159 * radius}\n\n" +
+                          "Example 3 - Shortcut Operators:\n" +
+                          "Template:\n" +
+                          "{VAR counter = 0}\n" +
+                          "Initial count: {counter}\n" +
+                          "{VAR counter++}\n" +
+                          "After increment: {counter}\n" +
+                          "{VAR total = 100}\n" +
+                          "{VAR total += 25}\n" +
+                          "Total after adding 25: {total}\n" +
+                          "{VAR total *= 1.08}\n" +
+                          "Total with 8% increase: {MATH total}");
         
         content.getChildren().addAll(helpTable, exampleLabel, exampleArea);
         
@@ -3817,4 +3846,15 @@ public class RegexEditorPanel extends BorderPane {
         dialog.showAndWait();
     }
     
+    /**
+     * Cleanup method to stop timers and remove listeners
+     */
+    public void cleanup() {
+        if (validationPause != null) {
+            validationPause.stop();
+        }
+        if (popOutWindow != null) {
+            popOutWindow.close();
+        }
+    }
 }

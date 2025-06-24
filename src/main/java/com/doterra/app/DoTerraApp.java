@@ -8,6 +8,8 @@ import javafx.scene.image.Image;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import javafx.embed.swing.SwingFXUtils;
+import javafx.beans.value.ChangeListener;
+import javafx.beans.value.WeakChangeListener;
 
 public class DoTerraApp extends Application {
 
@@ -35,6 +37,16 @@ public class DoTerraApp extends Application {
             mainView.cleanup();
         });
         
+        // Add shutdown hook for abnormal termination
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            // This runs on shutdown, but not on JavaFX thread
+            try {
+                mainView.cleanup();
+            } catch (Exception ex) {
+                // Ignore exceptions during shutdown
+            }
+        }));
+        
         // Set up taskbar badge based on ready todo count
         setupTaskbarBadge(primaryStage, mainView);
         
@@ -45,7 +57,8 @@ public class DoTerraApp extends Application {
      * Set up taskbar badge to show ready todo count in window title and icon
      */
     private void setupTaskbarBadge(Stage primaryStage, MainView mainView) {
-        mainView.getTodoPanel().readyTodoCountProperty().addListener((obs, oldCount, newCount) -> {
+        // Create the listener for todo count changes
+        ChangeListener<Number> todoCountListener = (obs, oldCount, newCount) -> {
             int count = newCount.intValue();
             if (count > 0) {
                 primaryStage.setTitle(APP_TITLE + " (" + count + ")");
@@ -56,7 +69,12 @@ public class DoTerraApp extends Application {
                 primaryStage.getIcons().clear();
                 primaryStage.getIcons().add(createDefaultIcon());
             }
-        });
+        };
+        
+        // Use weak listener to avoid strong reference from TodoPanel to Stage
+        mainView.getTodoPanel().readyTodoCountProperty().addListener(
+            new WeakChangeListener<>(todoCountListener)
+        );
         
         // Initial setup
         primaryStage.getIcons().add(createDefaultIcon());
