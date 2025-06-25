@@ -87,31 +87,33 @@ public class DoTerraApp extends Application {
     }
     
     /**
-     * Create the default application icon
+     * Create the default application icon (green circle with '0')
      */
     private Image createDefaultIcon() {
         BufferedImage bufferedImage = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g2d = bufferedImage.createGraphics();
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         
-        // Draw a simple icon (green circle with "dT" text)
+        // Draw green circle
         g2d.setColor(new Color(76, 175, 80)); // Material Green
         g2d.fillOval(4, 4, 56, 56);
         
+        // Draw white '0' in center
         g2d.setColor(Color.WHITE);
-        g2d.setFont(new Font("Arial", Font.BOLD, 22));
+        g2d.setFont(new Font("Arial", Font.BOLD, 36));
         FontMetrics fm = g2d.getFontMetrics();
-        String text = "dT";
+        String text = "0";
         int textWidth = fm.stringWidth(text);
         int textHeight = fm.getAscent();
-        g2d.drawString(text, (64 - textWidth) / 2, (64 + textHeight) / 2 - 2);
+        g2d.drawString(text, (64 - textWidth) / 2, (64 + textHeight) / 2 - 4);
         
         g2d.dispose();
         return SwingFXUtils.toFXImage(bufferedImage, null);
     }
     
     /**
-     * Create an application icon with a badge showing the count
+     * Create an application icon with red circle showing the count
      */
     private Image createBadgedIcon(int count) {
         BufferedImage bufferedImage = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
@@ -119,45 +121,22 @@ public class DoTerraApp extends Application {
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         
-        // Draw the base icon (green circle with "dT" text) - KEEP FULL SIZE like default icon
-        g2d.setColor(new Color(76, 175, 80)); // Material Green
+        // Draw red circle
+        g2d.setColor(new Color(244, 67, 54)); // Material Red
         g2d.fillOval(4, 4, 56, 56);
         
+        // Draw white count number in center
         g2d.setColor(Color.WHITE);
-        g2d.setFont(new Font("Arial", Font.BOLD, 22));
-        FontMetrics fm = g2d.getFontMetrics();
-        String text = "dT";
-        int textWidth = fm.stringWidth(text);
-        int textHeight = fm.getAscent();
-        g2d.drawString(text, (64 - textWidth) / 2, (64 + textHeight) / 2 - 2);
+        String countText = String.valueOf(Math.min(count, 99)); // Limit to 99
         
-        // Draw an ENORMOUS badge overlapping the icon - positioned to not obscure the dT text
-        String badgeText = String.valueOf(Math.min(count, 99)); // Limit to 99
-        g2d.setColor(new Color(244, 67, 54)); // Material Red
-        
-        // Make badge ENORMOUS but ensure it doesn't get cut off - 28px for single digits, 36px for double digits
-        int badgeSize = badgeText.length() == 1 ? 28 : 36;
-        int badgeX = 64 - badgeSize - 1; // Keep within bounds but still prominent
-        int badgeY = 1; // Keep within bounds
-        
-        // Draw badge background
-        g2d.fillOval(badgeX, badgeY, badgeSize, badgeSize);
-        
-        // Add white border around badge for contrast
-        g2d.setColor(Color.WHITE);
-        g2d.setStroke(new BasicStroke(3));
-        g2d.drawOval(badgeX, badgeY, badgeSize, badgeSize);
-        
-        // Draw badge text - MASSIVE font
-        g2d.setColor(Color.WHITE);
-        int fontSize = badgeText.length() == 1 ? 20 : 16;
+        // Choose font size based on number of digits
+        int fontSize = countText.length() == 1 ? 36 : (countText.length() == 2 ? 28 : 24);
         g2d.setFont(new Font("Arial", Font.BOLD, fontSize));
-        FontMetrics badgeFm = g2d.getFontMetrics();
-        int badgeTextWidth = badgeFm.stringWidth(badgeText);
-        int badgeTextHeight = badgeFm.getAscent();
-        int textX = badgeX + (badgeSize - badgeTextWidth) / 2;
-        int textY = badgeY + (badgeSize + badgeTextHeight) / 2 - 2;
-        g2d.drawString(badgeText, textX, textY);
+        
+        FontMetrics fm = g2d.getFontMetrics();
+        int textWidth = fm.stringWidth(countText);
+        int textHeight = fm.getAscent();
+        g2d.drawString(countText, (64 - textWidth) / 2, (64 + textHeight) / 2 - 4);
         
         g2d.dispose();
         return SwingFXUtils.toFXImage(bufferedImage, null);

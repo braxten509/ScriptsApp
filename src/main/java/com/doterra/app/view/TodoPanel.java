@@ -417,6 +417,9 @@ public class TodoPanel extends BorderPane {
         
         // Apply the loaded data
         loadCurrentFormat(data);
+        
+        // Ensure ready count is updated after loading
+        updateReadyTodoCount();
     }
     
     /**
@@ -620,7 +623,10 @@ public class TodoPanel extends BorderPane {
      * Add all necessary listeners to a task
      */
     private void addTaskListeners(TodoTask task) {
-        task.statusProperty().addListener((obs, oldStatus, newStatus) -> saveTodoData());
+        task.statusProperty().addListener((obs, oldStatus, newStatus) -> {
+            saveTodoData();
+            updateReadyTodoCount(); // Update ready count when status changes
+        });
         task.nameProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
         task.idProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
         task.descriptionProperty().addListener((obs, oldValue, newValue) -> saveTodoData());
@@ -659,6 +665,7 @@ public class TodoPanel extends BorderPane {
         if (anyChanged) {
             activeTasksTable.refresh();
             saveTodoData();
+            updateReadyTodoCount(); // Ensure count is updated when tasks become ready
         }
     }
     
@@ -1373,7 +1380,7 @@ public class TodoPanel extends BorderPane {
                 currentTextArea.setPrefRowCount(4);
                 currentTextArea.setPrefHeight(80);
                 currentTextArea.setMaxHeight(80);
-                currentTextArea.setStyle("-fx-border-width: 1; -fx-border-color: #cccccc; -fx-background-color: white; -fx-text-alignment: center;");
+                currentTextArea.setStyle("-fx-border-width: 1; -fx-border-color: #cccccc; -fx-background-color: white; -fx-font-size: 11px;");
                 
                 // Save content when focus is lost (but don't auto-collapse - let global handler do that)
                 currentTextArea.focusedProperty().addListener((obs, wasFocused, isNowFocused) -> {
@@ -1388,17 +1395,14 @@ public class TodoPanel extends BorderPane {
                     }
                 });
                 
-                // Prevent mouse events from bubbling up to the cell when inside TextArea
-                currentTextArea.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, event -> {
-                    event.consume(); // Stop the event from reaching the cell
-                });
-                
-                currentTextArea.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, event -> {
-                    event.consume(); // Stop the event from reaching the cell
-                });
-                
-                currentTextArea.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_RELEASED, event -> {
-                    event.consume(); // Stop the event from reaching the cell
+                // Only prevent double-clicks from bubbling to prevent unwanted expand/collapse
+                // Let single clicks and other events through for normal TextArea functionality
+                currentTextArea.addEventHandler(javafx.scene.input.MouseEvent.MOUSE_CLICKED, event -> {
+                    if (event.getClickCount() == 2) {
+                        // Prevent double-clicks from toggling the expanded state
+                        event.consume();
+                    }
+                    // Single clicks are allowed through for cursor positioning
                 });
                 
                 setGraphic(currentTextArea);
@@ -1679,6 +1683,7 @@ public class TodoPanel extends BorderPane {
         TodoTask selected = activeTasksTable.getSelectionModel().getSelectedItem();
         if (selected != null) {
             activeTasks.remove(selected);
+            updateReadyTodoCount(); // Update ready count after removing task
             saveTodoData();
         }
     }
@@ -1686,6 +1691,7 @@ public class TodoPanel extends BorderPane {
     private void moveToCompleted(TodoTask task) {
         activeTasks.remove(task);
         completedTasks.add(new CompletedTask(task));
+        updateReadyTodoCount(); // Update ready count after removing task
         saveTodoData();
     }
     

@@ -1,6 +1,7 @@
 package com.doterra.app.view;
 
 import com.doterra.app.model.ImageNote;
+import com.doterra.app.util.HyperlinkButtonUtil;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
@@ -86,19 +87,28 @@ public class ImageNotesPanel extends BorderPane {
     }
     
     private ToolBar createToolbar() {
-        Button uploadButton = new Button("Upload Image");
+        Button uploadButton = HyperlinkButtonUtil.createHyperlinkButton("Upload Image");
         uploadButton.setOnAction(e -> uploadImage());
         
-        Button refreshButton = new Button("Refresh");
+        Button refreshButton = HyperlinkButtonUtil.createHyperlinkButton("Refresh");
         refreshButton.setOnAction(e -> checkForNewScreenshots());
         
         ToggleButton monitorToggle = new ToggleButton("Monitor Screenshots");
         monitorToggle.setSelected(isMonitoring);
+        HyperlinkButtonUtil.styleAsHyperlinkToggleButton(monitorToggle);
+        
+        // Set initial active state
+        if (isMonitoring) {
+            HyperlinkButtonUtil.setButtonActive(monitorToggle);
+        }
+        
         monitorToggle.setOnAction(e -> {
             isMonitoring = monitorToggle.isSelected();
             if (isMonitoring) {
+                HyperlinkButtonUtil.setButtonActive(monitorToggle);
                 startScreenshotMonitoring();
             } else {
+                HyperlinkButtonUtil.setButtonInactive(monitorToggle);
                 stopScreenshotMonitoring();
             }
         });
@@ -107,7 +117,13 @@ public class ImageNotesPanel extends BorderPane {
         
         Label monitoringLabel = new Label("Monitoring: " + screenshotDirs.size() + " directories");
         
-        ToolBar toolbar = new ToolBar(uploadButton, refreshButton, new Separator(), monitorToggle, 
+        // Image actions group
+        HBox imageActionsGroup = HyperlinkButtonUtil.createButtonGroup(5, uploadButton, refreshButton);
+        
+        // Monitor control group
+        HBox monitorControlGroup = HyperlinkButtonUtil.createButtonGroup(5, monitorToggle);
+        
+        ToolBar toolbar = new ToolBar(imageActionsGroup, new Separator(), monitorControlGroup, 
                                      new Separator(), infoLabel, new Separator(), monitoringLabel);
         toolbar.getStyleClass().add("image-notes-toolbar");
         return toolbar;
@@ -277,6 +293,7 @@ public class ImageNotesPanel extends BorderPane {
             // Create delete button
             Button deleteBtn = new Button("✕");
             deleteBtn.getStyleClass().add("thumbnail-delete-btn");
+            HyperlinkButtonUtil.addSmoothHoverAnimation(deleteBtn);
             deleteBtn.setVisible(false);
             deleteBtn.setOnAction(e -> {
                 e.consume(); // Prevent event from propagating to image click
@@ -352,10 +369,10 @@ public class ImageNotesPanel extends BorderPane {
         zoomControls.setAlignment(Pos.CENTER);
         zoomControls.setPadding(new Insets(5));
         
-        Button fitToWindowBtn = new Button("Fit to Window");
-        Button actualSizeBtn = new Button("Actual Size");
-        Button zoomInBtn = new Button("Zoom In");
-        Button zoomOutBtn = new Button("Zoom Out");
+        Button fitToWindowBtn = HyperlinkButtonUtil.createHyperlinkButton("Fit to Window");
+        Button actualSizeBtn = HyperlinkButtonUtil.createHyperlinkButton("Actual Size");
+        Button zoomInBtn = HyperlinkButtonUtil.createHyperlinkButton("Zoom In");
+        Button zoomOutBtn = HyperlinkButtonUtil.createHyperlinkButton("Zoom Out");
         Label zoomLabel = new Label("100%");
         
         fitToWindowBtn.setOnAction(e -> {
@@ -382,8 +399,14 @@ public class ImageNotesPanel extends BorderPane {
             updateZoomLabel(zoomLabel, imageView, image);
         });
         
-        zoomControls.getChildren().addAll(fitToWindowBtn, actualSizeBtn, new Separator(Orientation.VERTICAL),
-                                         zoomOutBtn, zoomInBtn, zoomLabel);
+        // Zoom preset group
+        HBox zoomPresetsGroup = HyperlinkButtonUtil.createButtonGroup(5, fitToWindowBtn, actualSizeBtn);
+        
+        // Zoom control group
+        HBox zoomControlGroup = HyperlinkButtonUtil.createButtonGroup(5, zoomOutBtn, zoomInBtn);
+        
+        zoomControls.getChildren().addAll(zoomPresetsGroup, new Separator(Orientation.VERTICAL),
+                                         zoomControlGroup, zoomLabel);
         
         // Note display/edit area
         TextArea noteArea = new TextArea(imageNote.getNote());

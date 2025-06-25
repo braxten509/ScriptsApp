@@ -165,41 +165,13 @@
 }
 
 .image-notes-toolbar {
-    -fx-background-color: #e0e0e0;
+    -fx-background-color: transparent;
     -fx-padding: 10;
 }
 
-.image-notes-toolbar .button {
-    -fx-background-color: #4B9CD3;
-    -fx-text-fill: white;
-    -fx-background-radius: 4;
-    -fx-padding: 8 15;
-}
+/* Image Notes toolbar buttons now use hyperlink styling from HyperlinkButtonUtil */
 
-.image-notes-toolbar .button:hover {
-    -fx-background-color: #5BAAE3;
-}
-
-.image-notes-toolbar .toggle-button {
-    -fx-background-color: #757575;
-    -fx-text-fill: white;
-    -fx-background-radius: 4;
-    -fx-padding: 8 15;
-}
-
-.image-notes-toolbar .toggle-button:hover {
-    -fx-background-color: #868686;
-    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 4, 0, 0, 1);
-}
-
-.image-notes-toolbar .toggle-button:selected {
-    -fx-background-color: #4CAF50;
-}
-
-.image-notes-toolbar .toggle-button:selected:hover {
-    -fx-background-color: #5CBF60;
-    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 4, 0, 0, 1);
-}
+/* Image Notes toolbar toggle buttons now use hyperlink styling from HyperlinkButtonUtil */
 
 .image-notes-scroll {
     -fx-background-color: #f5f5f5;
@@ -377,4 +349,191 @@
 .calc-special-button:pressed {
     -fx-background-color: #455A64;
     -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 2, 0, 0, 1);
+}
+
+/* Regex Editor Hyperlink-style Buttons */
+.regex-hyperlink-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: #0066CC;
+    -fx-underline: false;
+    -fx-border-width: 2;
+    -fx-border-color: transparent;
+    -fx-padding: 4 8;
+    -fx-cursor: hand;
+    -fx-font-size: 13px;
+    -fx-background-radius: 3;
+    -fx-border-radius: 3;
+    -fx-effect: null;
+}
+
+.regex-hyperlink-button:hover {
+    -fx-background-color: rgba(0, 102, 204, 0.1);
+    -fx-background-insets: 2;
+    -fx-text-fill: #004499;
+    -fx-effect: dropshadow(gaussian, rgba(0, 102, 204, 0.3), 4, 0, 0, 1);
+}
+
+.regex-hyperlink-button:pressed {
+    -fx-background-color: rgba(0, 102, 204, 0.2);
+    -fx-text-fill: #003366;
+    -fx-effect: dropshadow(gaussian, rgba(0, 102, 204, 0.2), 2, 0, 0, 1);
+}
+
+/* Regex Editor Button Groups */
+.regex-button-group {
+    -fx-border-color: rgba(0, 102, 204, 0.2);
+    -fx-border-width: 1;
+    -fx-border-radius: 5;
+    -fx-background-color: rgba(0, 102, 204, 0.05);
+    -fx-background-radius: 5;
+    -fx-padding: 8 8;
+    -fx-spacing: 5;
+    -fx-min-height: 29;
+    -fx-pref-height: 29;
+    -fx-alignment: center-left;
+}
+
+.regex-button-group-vertical {
+    -fx-border-color: rgba(0, 102, 204, 0.2);
+    -fx-border-width: 0 0 0 3;
+    -fx-background-color: transparent;
+    -fx-padding: 0 0 0 8;
+    -fx-spacing: 5;
+}
+
+.regex-group-separator {
+    -fx-background-color: rgba(0, 102, 204, 0.3);
+    -fx-pref-width: 1;
+    -fx-max-width: 1;
+    -fx-min-width: 1;
+}
+
+/* Selected Hyperlink Button (for math operators) */
+.regex-hyperlink-button.selected {
+    -fx-background-color: rgba(0, 102, 204, 0.2);
+    -fx-text-fill: #003366;
+    -fx-font-weight: bold;
+    -fx-border-color: #0066CC;
+    -fx-border-width: 2;
+    -fx-border-radius: 3;
+}
+
+.regex-hyperlink-button.selected:hover {
+    -fx-background-color: rgba(0, 102, 204, 0.3);
+    -fx-text-fill: #002244;
+    -fx-font-weight: bold;
+    -fx-border-color: #004499;
+    -fx-border-width: 2;
+}
+
+/* Active Hyperlink Button (for toggles - no bold) */
+.regex-hyperlink-button.active {
+    -fx-background-color: rgba(0, 102, 204, 0.2);
+    -fx-text-fill: #003366;
+    -fx-border-color: #0066CC;
+    -fx-border-width: 2;
+    -fx-border-radius: 3;
+}
+
+.regex-hyperlink-button.active:hover {
+    -fx-background-color: rgba(0, 102, 204, 0.3);
+    -fx-text-fill: #002244;
+    -fx-border-color: #004499;
+    -fx-border-width: 2;
+}
+
+/* Checkbox Styling */
+.hyperlink-checkbox {
+    -fx-text-fill: #0066CC;
+    -fx-cursor: hand;
+    -fx-font-size: 13px;
+    -fx-padding: 2 4;
+}
+
+.hyperlink-checkbox:hover {
+    -fx-text-fill: #004499;
+}
+
+.hyperlink-checkbox .box {
+    -fx-background-color: transparent;
+    -fx-border-color: rgba(0, 102, 204, 0.6);
+    -fx-border-width: 2;
+    -fx-border-radius: 3;
+    -fx-background-radius: 3;
+    -fx-padding: 2;
+}
+
+.hyperlink-checkbox:hover .box {
+    -fx-border-color: #0066CC;
+    -fx-background-color: rgba(0, 102, 204, 0.05);
+}
+
+.hyperlink-checkbox:selected .box {
+    -fx-background-color: rgba(0, 102, 204, 0.2);
+    -fx-border-color: #0066CC;
+}
+
+.hyperlink-checkbox:selected:hover .box {
+    -fx-background-color: rgba(0, 102, 204, 0.3);
+    -fx-border-color: #004499;
+}
+
+.hyperlink-checkbox .mark {
+    -fx-background-color: transparent;
+    -fx-shape: null;
+}
+
+.hyperlink-checkbox:selected .mark {
+    -fx-background-color: #0066CC;
+    -fx-shape: "M0,5 L3,8 L8,0 L8,1 L3,9 L0,6 Z";
+    -fx-scale-shape: true;
+    -fx-background-insets: 1;
+}
+
+.hyperlink-checkbox:selected:hover .mark {
+    -fx-background-color: #004499;
+}
+
+.hyperlink-checkbox:indeterminate .mark {
+    -fx-background-color: #0066CC;
+    -fx-shape: "M0,0 L8,0 L8,2 L0,2 Z";
+}
+
+/* Dropdown Menu Styling */
+.hyperlink-combo-box {
+    -fx-background-color: transparent;
+    -fx-border-color: rgba(0, 102, 204, 0.3);
+    -fx-border-width: 1;
+    -fx-border-radius: 3;
+    -fx-background-radius: 3;
+    -fx-padding: 4 8;
+    -fx-cursor: hand;
+}
+
+.hyperlink-combo-box:hover {
+    -fx-border-color: rgba(0, 102, 204, 0.6);
+    -fx-background-color: rgba(0, 102, 204, 0.05);
+}
+
+.hyperlink-combo-box:focused {
+    -fx-border-color: #0066CC;
+    -fx-background-color: rgba(0, 102, 204, 0.1);
+}
+
+.hyperlink-combo-box .arrow {
+    -fx-background-color: #0066CC;
+}
+
+.hyperlink-combo-box:hover .arrow {
+    -fx-background-color: #004499;
+}
+
+.hyperlink-combo-box .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: #0066CC;
+}
+
+.hyperlink-combo-box .list-cell:hover {
+    -fx-background-color: rgba(0, 102, 204, 0.1);
+    -fx-text-fill: #004499;
 }

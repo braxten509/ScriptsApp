@@ -1,6 +1,7 @@
 package com.doterra.app.view;
 
 import com.doterra.app.controller.NavigationController;
+import com.doterra.app.model.NavigationSection;
 import com.doterra.app.util.CssInspector;
 import com.doterra.app.util.SimpleStyler;
 import com.doterra.app.util.ComplexStyler;
@@ -17,6 +18,16 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.Scene;
 import javafx.beans.property.IntegerProperty;
 import javafx.stage.Stage;
+import javafx.scene.layout.Region;
+import javafx.animation.RotateTransition;
+import javafx.animation.Timeline;
+import javafx.animation.KeyFrame;
+import javafx.util.Duration;
+import javafx.scene.control.ListView;
+import javafx.scene.control.ListCell;
+import javafx.scene.control.MultipleSelectionModel;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 
 public class MainView {
     
@@ -30,8 +41,8 @@ public class MainView {
     private final EmailScriptsPanel emailScriptsPanel;
     private final CalculatorPanel calculatorPanel;
     
-    // Track active button
-    private Button activeNavButton;
+    // Track active navigation item
+    private String activeNavItem;
     
     public MainView() {
         root = new BorderPane();
@@ -56,7 +67,7 @@ public class MainView {
     }
     
     private VBox createSidebar() {
-        VBox sidebar = new VBox(10);
+        VBox sidebar = new VBox(5);
         sidebar.setPadding(new Insets(15));
         SimpleStyler.styleSidebar(sidebar);
         sidebar.setPrefWidth(200);
@@ -67,181 +78,327 @@ public class MainView {
         SimpleStyler.styleTitleLabel(titleLabel);
         titleLabel.setPadding(new Insets(0, 0, 20, 0));
         
-        // Navigation buttons
-        Button chatScriptsBtn = createNavButton("Chat Scripts");
-        chatScriptsBtn.setOnAction(e -> {
-            setActiveButton(chatScriptsBtn);
-            navigationController.showPanel("chat");
-        });
-        
-        Button emailScriptsBtn = createNavButton("Email Scripts");
-        emailScriptsBtn.setOnAction(e -> {
-            setActiveButton(emailScriptsBtn);
-            navigationController.showPanel("email");
-        });
-        
-        Button regexEditorBtn = createNavButton("Regex Editor");
-        regexEditorBtn.setOnAction(e -> {
-            setActiveButton(regexEditorBtn);
-            navigationController.showPanel("regex");
-        });
-        
-        Button calculatorBtn = createNavButton("Calculator");
-        calculatorBtn.setOnAction(e -> {
-            setActiveButton(calculatorBtn);
-            navigationController.showPanel("calculator");
-        });
-        
-        // Create todo button with badge for ready task count
-        StackPane todoBtnContainer = createNavButtonWithBadge("Todo", navigationController.getTodoPanel().readyTodoCountProperty());
-        Button todoBtn = (Button) todoBtnContainer.getChildren().get(0); // Get the actual button from the container
-        todoBtn.setOnAction(e -> {
-            setActiveButton(todoBtn);
-            navigationController.showPanel("todo");
-        });
-        
-        Button stickyNoteBtn = createNavButton("Sticky Notes");
-        stickyNoteBtn.setOnAction(e -> {
-            setActiveButton(stickyNoteBtn);
-            navigationController.showPanel("stickynote");
-        });
-        
-        Button calendarBtn = createNavButton("Calendar");
-        calendarBtn.setOnAction(e -> {
-            setActiveButton(calendarBtn);
-            navigationController.showPanel("calendar");
-        });
-        
-        Button imageNotesBtn = createNavButton("Image Notes");
-        imageNotesBtn.setOnAction(e -> {
-            setActiveButton(imageNotesBtn);
-            navigationController.showPanel("imagenotes");
-        });
-        
-        // Set initial active button
-        setActiveButton(chatScriptsBtn);
+        // Create navigation sections
+        VBox navigationContainer = new VBox(5);
+        for (NavigationSection section : navigationController.getNavigationSections()) {
+            VBox sectionContainer = createNavigationSection(section);
+            navigationContainer.getChildren().add(sectionContainer);
+        }
         
         // Add spacer to push content to top
-        VBox spacer = new VBox();
+        Region spacer = new Region();
         VBox.setVgrow(spacer, Priority.ALWAYS);
         
         // Create feature panel at bottom
         HBox featurePanel = createFeaturePanel();
         
-        sidebar.getChildren().addAll(titleLabel, chatScriptsBtn, emailScriptsBtn, regexEditorBtn, calculatorBtn, todoBtnContainer, stickyNoteBtn, calendarBtn, imageNotesBtn, spacer, featurePanel);
+        sidebar.getChildren().addAll(titleLabel, navigationContainer, spacer, featurePanel);
         return sidebar;
     }
     
-    private Button createNavButton(String text) {
-        Button button = new Button(text);
-        button.setMaxWidth(Double.MAX_VALUE);
-        button.setPrefHeight(40);
-        SimpleStyler.styleNavigationButton(button);
+    private VBox createNavigationSection(NavigationSection section) {
+        VBox sectionContainer = new VBox(3);
         
-        // Add hover effect that respects active state
-        button.setOnMouseEntered(e -> {
-            if (button != activeNavButton) {
-                button.setStyle(SimpleStyler.NAV_BUTTON_HOVER_STYLE);
-            }
-        });
-        button.setOnMouseExited(e -> {
-            if (button != activeNavButton) {
-                button.setStyle(SimpleStyler.NAV_BUTTON_STYLE);
-            }
-        });
-            
-        return button;
-    }
-    
-    private StackPane createNavButtonWithBadge(String text, IntegerProperty badgeCountProperty) {
-        // Create a StackPane to hold both the button and badge
-        StackPane buttonContainer = new StackPane();
-        
-        Button button = new Button(text);
-        button.setMaxWidth(Double.MAX_VALUE);
-        button.setPrefHeight(40);
-        SimpleStyler.styleNavigationButton(button);
-        
-        // Add hover effect that respects active state
-        button.setOnMouseEntered(e -> {
-            if (button != activeNavButton) {
-                button.setStyle(SimpleStyler.NAV_BUTTON_HOVER_STYLE);
-            }
-        });
-        button.setOnMouseExited(e -> {
-            if (button != activeNavButton) {
-                button.setStyle(SimpleStyler.NAV_BUTTON_STYLE);
-            }
-        });
-        
-        // Create badge label
-        Label badge = new Label();
-        badge.setStyle(
-            "-fx-background-color: #f44336; " +
+        // Section header button
+        Button sectionHeader = new Button(section.getTitle() + (section.isExpanded() ? " ▼" : " ▶"));
+        sectionHeader.setMaxWidth(Double.MAX_VALUE);
+        sectionHeader.setPrefHeight(35);
+        sectionHeader.setStyle(
+            "-fx-background-color: #37474F; " +
             "-fx-text-fill: white; " +
-            "-fx-font-size: 10px; " +
+            "-fx-font-size: 13px; " +
             "-fx-font-weight: bold; " +
-            "-fx-padding: 2 6 2 6; " +
-            "-fx-background-radius: 10; " +
-            "-fx-min-width: 18; " +
-            "-fx-min-height: 18; " +
-            "-fx-alignment: center;"
+            "-fx-padding: 8 12; " +
+            "-fx-background-radius: 3; " +
+            "-fx-cursor: hand; " +
+            "-fx-alignment: center-left;"
         );
-        badge.setVisible(false);
         
-        // Position badge in top-right corner
-        StackPane.setAlignment(badge, Pos.TOP_RIGHT);
-        badge.setTranslateX(-5);
-        badge.setTranslateY(4);
+        // Section header hover effect
+        sectionHeader.setOnMouseEntered(e -> 
+            sectionHeader.setStyle(sectionHeader.getStyle().replace("#37474F", "#455A64"))
+        );
+        sectionHeader.setOnMouseExited(e -> 
+            sectionHeader.setStyle(sectionHeader.getStyle().replace("#455A64", "#37474F"))
+        );
         
-        // Bind badge text and visibility to the count property
-        badgeCountProperty.addListener((obs, oldCount, newCount) -> {
-            if (newCount.intValue() > 0) {
-                badge.setText(String.valueOf(newCount.intValue()));
-                badge.setVisible(true);
-            } else {
-                badge.setVisible(false);
+        // Create ListView for navigation items
+        ListView<NavigationSection.NavigationItem> itemsList = new ListView<>();
+        ObservableList<NavigationSection.NavigationItem> items = FXCollections.observableArrayList(section.getItems());
+        itemsList.setItems(items);
+        
+        // Calculate height based on number of items
+        int itemHeight = 32; // Height per item
+        int listHeight = section.getItems().size() * itemHeight;
+        itemsList.setPrefHeight(listHeight);
+        itemsList.setMaxHeight(listHeight);
+        itemsList.setMinHeight(listHeight);
+        
+        // Style the ListView to completely hide selection
+        itemsList.setStyle(
+            "-fx-background-color: transparent; " +
+            "-fx-background-insets: 0; " +
+            "-fx-padding: 0; " +
+            "-fx-border-width: 0; " +
+            "-fx-focus-color: transparent; " +
+            "-fx-faint-focus-color: transparent; " +
+            "-fx-selection-bar: transparent; " +
+            "-fx-selection-bar-non-focused: transparent; " +
+            "-fx-cell-focus-inner-border: transparent; " +
+            "-fx-cell-border: transparent; " +
+            "-fx-cell-selection-border: transparent;"
+        );
+        
+        // Disable focus traversal to prevent keyboard selection
+        itemsList.setFocusTraversable(false);
+        
+        // Create a custom selection model that doesn't visually select items
+        itemsList.setSelectionModel(new NoSelectionModel<>());
+        
+        // Force clear any initial selection
+        itemsList.getSelectionModel().clearSelection();
+        
+        // Ensure ListView doesn't create extra cells
+        itemsList.setFixedCellSize(itemHeight);
+        
+        // Custom cell factory for navigation items
+        itemsList.setCellFactory(listView -> new ListCell<NavigationSection.NavigationItem>() {
+            private HBox badgeContainer;
+            private Label badge;
+            
+            @Override
+            protected void updateItem(NavigationSection.NavigationItem item, boolean empty) {
+                super.updateItem(item, empty);
+                
+                if (empty || item == null) {
+                    setText(null);
+                    setGraphic(null);
+                    setStyle(getEmptyCellStyle());
+                    setOnMouseClicked(null);
+                    setOnMouseEntered(null);
+                    setOnMouseExited(null);
+                } else {
+                    setText(item.getLabel());
+                    
+                    // Handle badge for todo item
+                    if (item.hasBadge() && item.getPanelId().equals("todo")) {
+                        if (badgeContainer == null) {
+                            // Create HBox to position text on left and badge on right
+                            HBox container = new HBox();
+                            container.setAlignment(Pos.CENTER_LEFT);
+                            container.setSpacing(5);
+                            
+                            // Create label for the text
+                            Label textLabel = new Label();
+                            textLabel.setStyle("-fx-text-fill: white; -fx-font-size: 12px;");
+                            
+                            // Create spacer to push badge to the right
+                            Region spacer = new Region();
+                            HBox.setHgrow(spacer, Priority.ALWAYS);
+                            
+                            // Create badge
+                            badge = new Label();
+                            badge.setStyle(
+                                "-fx-background-color: #f44336; " +
+                                "-fx-text-fill: white; " +
+                                "-fx-font-size: 9px; " +
+                                "-fx-font-weight: bold; " +
+                                "-fx-padding: 1 4 1 4; " +
+                                "-fx-background-radius: 8; " +
+                                "-fx-min-width: 16; " +
+                                "-fx-min-height: 16; " +
+                                "-fx-alignment: center;"
+                            );
+                            
+                            container.getChildren().addAll(textLabel, spacer, badge);
+                            badgeContainer = container;
+                        }
+                        
+                        // Update text label
+                        HBox container = (HBox) badgeContainer;
+                        Label textLabel = (Label) container.getChildren().get(0);
+                        textLabel.setText(item.getLabel());
+                        
+                        // Update text color based on current cell state
+                        if (item.getPanelId().equals(activeNavItem)) {
+                            textLabel.setStyle("-fx-text-fill: white; -fx-font-size: 12px; -fx-font-weight: bold;");
+                        } else {
+                            textLabel.setStyle("-fx-text-fill: white; -fx-font-size: 12px;");
+                        }
+                        
+                        // Clear the cell text since we're using the graphic
+                        setText(null);
+                        
+                        // Bind badge to todo count
+                        IntegerProperty todoCount = navigationController.getTodoPanel().readyTodoCountProperty();
+                        todoCount.addListener((obs, oldCount, newCount) -> {
+                            if (newCount.intValue() > 0) {
+                                badge.setText(String.valueOf(newCount.intValue()));
+                                badge.setVisible(true);
+                            } else {
+                                badge.setVisible(false);
+                            }
+                        });
+                        
+                        // Initial setup
+                        if (todoCount.get() > 0) {
+                            badge.setText(String.valueOf(todoCount.get()));
+                            badge.setVisible(true);
+                        } else {
+                            badge.setVisible(false);
+                        }
+                        
+                        setGraphic(badgeContainer);
+                    } else {
+                        setGraphic(null);
+                    }
+                    
+                    // Apply active style if this is the active item
+                    if (item.getPanelId().equals(activeNavItem)) {
+                        setStyle(getActiveCellStyle());
+                    } else {
+                        setStyle(getDefaultCellStyle());
+                    }
+                    
+                    // Set up hover effects
+                    setOnMouseEntered(e -> {
+                        if (!item.getPanelId().equals(activeNavItem)) {
+                            setStyle(getHoverCellStyle());
+                            updateTextLabelColor(item, false);
+                        }
+                    });
+                    
+                    setOnMouseExited(e -> {
+                        if (item.getPanelId().equals(activeNavItem)) {
+                            setStyle(getActiveCellStyle());
+                            updateTextLabelColor(item, true);
+                        } else {
+                            setStyle(getDefaultCellStyle());
+                            updateTextLabelColor(item, false);
+                        }
+                    });
+                    
+                    // Handle selection
+                    setOnMouseClicked(e -> {
+                        setActiveNavItem(item.getPanelId());
+                        navigationController.showPanel(item.getPanelId());
+                        // Update all cells in all sections
+                        updateAllNavigationCells();
+                    });
+                }
+            }
+            
+            private String getDefaultCellStyle() {
+                return "-fx-background-color: transparent; " +
+                       "-fx-text-fill: white; " +
+                       "-fx-font-size: 12px; " +
+                       "-fx-padding: 6 12 6 20; " +
+                       "-fx-border-width: 0; " +
+                       "-fx-background-radius: 0; " +
+                       "-fx-cursor: hand; " +
+                       "-fx-cell-selection-border: transparent; " +
+                       "-fx-focus-color: transparent; " +
+                       "-fx-selection-bar: transparent;";
+            }
+            
+            private String getHoverCellStyle() {
+                return "-fx-background-color: #455A64; " +
+                       "-fx-text-fill: white; " +
+                       "-fx-font-size: 12px; " +
+                       "-fx-padding: 6 12 6 20; " +
+                       "-fx-border-width: 0; " +
+                       "-fx-background-radius: 0; " +
+                       "-fx-cursor: hand; " +
+                       "-fx-cell-selection-border: transparent; " +
+                       "-fx-focus-color: transparent; " +
+                       "-fx-selection-bar: transparent;";
+            }
+            
+            private String getActiveCellStyle() {
+                return "-fx-background-color: #2196F3; " +
+                       "-fx-text-fill: white; " +
+                       "-fx-font-size: 12px; " +
+                       "-fx-font-weight: bold; " +
+                       "-fx-padding: 6 12 6 20; " +
+                       "-fx-border-width: 0; " +
+                       "-fx-background-radius: 0; " +
+                       "-fx-cursor: hand; " +
+                       "-fx-cell-selection-border: transparent; " +
+                       "-fx-focus-color: transparent; " +
+                       "-fx-selection-bar: transparent;";
+            }
+            
+            private String getEmptyCellStyle() {
+                return "-fx-background-color: transparent !important; " +
+                       "-fx-text-fill: transparent; " +
+                       "-fx-font-size: 0px; " +
+                       "-fx-padding: 0; " +
+                       "-fx-border-width: 0; " +
+                       "-fx-background-radius: 0; " +
+                       "-fx-cursor: default; " +
+                       "-fx-cell-selection-border: transparent !important; " +
+                       "-fx-focus-color: transparent !important; " +
+                       "-fx-selection-bar: transparent !important; " +
+                       "-fx-selection-bar-non-focused: transparent !important;";
+            }
+            
+            private void updateTextLabelColor(NavigationSection.NavigationItem item, boolean isActive) {
+                if (item.hasBadge() && item.getPanelId().equals("todo") && badgeContainer != null) {
+                    if (!badgeContainer.getChildren().isEmpty() && badgeContainer.getChildren().get(0) instanceof Label) {
+                        Label textLabel = (Label) badgeContainer.getChildren().get(0);
+                        if (isActive) {
+                            textLabel.setStyle("-fx-text-fill: white; -fx-font-size: 12px; -fx-font-weight: bold;");
+                        } else {
+                            textLabel.setStyle("-fx-text-fill: white; -fx-font-size: 12px;");
+                        }
+                    }
+                }
             }
         });
         
-        // Initial setup
-        if (badgeCountProperty.get() > 0) {
-            badge.setText(String.valueOf(badgeCountProperty.get()));
-            badge.setVisible(true);
+        // Set initial active item (Chat Scripts)
+        if (section.getTitle().equals("Basic") && !section.getItems().isEmpty()) {
+            setActiveNavItem(section.getItems().get(0).getPanelId());
         }
         
-        buttonContainer.getChildren().addAll(button, badge);
-        buttonContainer.setMaxWidth(Double.MAX_VALUE);
+        // Set initial visibility based on expanded state
+        itemsList.setVisible(section.isExpanded());
+        itemsList.setManaged(section.isExpanded());
         
-        return buttonContainer;
+        // Section header click handler
+        sectionHeader.setOnAction(e -> {
+            navigationController.toggleSection(section.getTitle());
+            boolean newExpanded = section.isExpanded();
+            itemsList.setVisible(newExpanded);
+            itemsList.setManaged(newExpanded);
+            sectionHeader.setText(section.getTitle() + (newExpanded ? " ▼" : " ▶"));
+        });
+        
+        sectionContainer.getChildren().addAll(sectionHeader, itemsList);
+        return sectionContainer;
     }
     
-    private void setActiveButton(Button button) {
-        // Remove active style from previous button
-        if (activeNavButton != null) {
-            activeNavButton.getStyleClass().remove("nav-button-active");
-            // Reapply normal style
-            SimpleStyler.styleNavigationButton(activeNavButton);
-        }
-        
-        // Set new active button
-        activeNavButton = button;
-        
-        // Apply active style
-        if (activeNavButton != null) {
-            activeNavButton.getStyleClass().add("nav-button-active");
-            activeNavButton.setStyle(
-                "-fx-background-color: #2196F3; " +  // Bright blue for active state
-                "-fx-text-fill: white; " +
-                "-fx-font-size: 14px; " +
-                "-fx-font-weight: bold; " +  // Bold text for active
-                "-fx-padding: 10 15; " +
-                "-fx-background-radius: 5; " +
-                "-fx-cursor: hand; " +
-                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 5, 0, 0, 2);"  // Subtle shadow
-            );
+    private void setActiveNavItem(String panelId) {
+        activeNavItem = panelId;
+    }
+    
+    private void updateAllNavigationCells() {
+        // Force refresh of all ListView cells to update active states
+        VBox navigationContainer = (VBox) ((VBox) root.getLeft()).getChildren().get(1);
+        for (javafx.scene.Node sectionNode : navigationContainer.getChildren()) {
+            if (sectionNode instanceof VBox) {
+                VBox sectionContainer = (VBox) sectionNode;
+                for (javafx.scene.Node child : sectionContainer.getChildren()) {
+                    if (child instanceof ListView) {
+                        @SuppressWarnings("unchecked")
+                        ListView<NavigationSection.NavigationItem> listView = (ListView<NavigationSection.NavigationItem>) child;
+                        listView.refresh();
+                    }
+                }
+            }
         }
     }
+    
     
     private HBox createFeaturePanel() {
         HBox panel = new HBox(5);
@@ -323,6 +480,87 @@ public class MainView {
         NavigationController navController = getNavigationController();
         if (navController != null) {
             navController.cleanup();
+        }
+    }
+    
+    /**
+     * Custom selection model that prevents visual selection but doesn't cause NPE
+     */
+    private static class NoSelectionModel<T> extends MultipleSelectionModel<T> {
+        
+        @Override
+        public ObservableList<Integer> getSelectedIndices() {
+            return FXCollections.emptyObservableList();
+        }
+        
+        @Override
+        public ObservableList<T> getSelectedItems() {
+            return FXCollections.emptyObservableList();
+        }
+        
+        @Override
+        public void selectIndices(int index, int... indices) {
+            // Do nothing - prevent selection
+        }
+        
+        @Override
+        public void selectAll() {
+            // Do nothing - prevent selection
+        }
+        
+        @Override
+        public void selectFirst() {
+            // Do nothing - prevent selection
+        }
+        
+        @Override
+        public void selectLast() {
+            // Do nothing - prevent selection
+        }
+        
+        @Override
+        public void clearAndSelect(int index) {
+            // Do nothing - prevent selection
+        }
+        
+        @Override
+        public void select(int index) {
+            // Do nothing - prevent selection
+        }
+        
+        @Override
+        public void select(T obj) {
+            // Do nothing - prevent selection
+        }
+        
+        @Override
+        public void clearSelection(int index) {
+            // Do nothing - already no selection
+        }
+        
+        @Override
+        public void clearSelection() {
+            // Do nothing - already no selection
+        }
+        
+        @Override
+        public boolean isSelected(int index) {
+            return false; // Never selected
+        }
+        
+        @Override
+        public boolean isEmpty() {
+            return true; // Always empty selection
+        }
+        
+        @Override
+        public void selectPrevious() {
+            // Do nothing - prevent selection
+        }
+        
+        @Override
+        public void selectNext() {
+            // Do nothing - prevent selection
         }
     }
 }

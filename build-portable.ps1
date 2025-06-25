@@ -32,7 +32,7 @@ New-Item -ItemType Directory -Path "$OutputDir\data" -Force | Out-Null
 
 # Build the application
 Write-Host "Building application with Maven..." -ForegroundColor Yellow
-mvn clean package -DskipTests
+& mvn clean compile package "-Dmaven.test.skip=true"
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Maven build failed!" -ForegroundColor Red
     exit 1

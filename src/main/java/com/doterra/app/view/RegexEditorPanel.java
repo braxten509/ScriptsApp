@@ -11,6 +11,8 @@ import java.util.*;
 import java.io.*;
 import java.util.Arrays;
 import javafx.animation.PauseTransition;
+import javafx.animation.ScaleTransition;
+import javafx.animation.Interpolator;
 import javafx.util.Duration;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.control.cell.TextFieldTableCell;
@@ -21,6 +23,7 @@ import com.doterra.app.model.RegexTemplate;
 import com.doterra.app.model.RegexTest;
 import com.doterra.app.model.RegexTestManager;
 import com.doterra.app.util.DialogUtil;
+import com.doterra.app.util.HyperlinkButtonUtil;
 import java.io.*;
 import javafx.util.StringConverter;
 import javafx.scene.control.SpinnerValueFactory;
@@ -152,7 +155,8 @@ public class RegexEditorPanel extends BorderPane {
         HBox templateBar = new HBox(10);
         templateBar.setAlignment(Pos.CENTER_LEFT);
         
-        Label templateLabel = new Label("Template:");
+        Label templateLabel = new Label("TEMPLATE");
+        templateLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
         templateComboBox = new ComboBox<>();
         templateComboBox.setConverter(new StringConverter<RegexTemplate>() {
             @Override
@@ -167,6 +171,7 @@ public class RegexEditorPanel extends BorderPane {
             }
         });
         templateComboBox.setPrefWidth(200);
+        HyperlinkButtonUtil.styleAsHyperlinkComboBox(templateComboBox);
         // Note: Items will be set after templates are loaded asynchronously
         templateComboBox.setOnAction(e -> {
             RegexTemplate selected = templateComboBox.getValue();
@@ -175,42 +180,50 @@ public class RegexEditorPanel extends BorderPane {
             }
         });
         
-        Button saveBtn = new Button("Save");
+        Button saveBtn = HyperlinkButtonUtil.createHyperlinkButton("Save");
         saveBtn.setOnAction(e -> saveCurrentTemplate());
         
-        Button newBtn = new Button("New");
+        Button newBtn = HyperlinkButtonUtil.createHyperlinkButton("New");
         newBtn.setOnAction(e -> createNewTemplate());
         
-        Button duplicateBtn = new Button("Duplicate");
+        Button duplicateBtn = HyperlinkButtonUtil.createHyperlinkButton("Duplicate");
         duplicateBtn.setOnAction(e -> duplicateTemplate());
         
-        Button renameBtn = new Button("Rename");
+        Button renameBtn = HyperlinkButtonUtil.createHyperlinkButton("Rename");
         renameBtn.setOnAction(e -> renameTemplate());
         
-        Button deleteBtn = new Button("Delete");
+        Button deleteBtn = HyperlinkButtonUtil.createHyperlinkButton("Delete");
         deleteBtn.setOnAction(e -> deleteTemplate());
         
-        Button setDefaultBtn = new Button("Set Default");
+        Button setDefaultBtn = HyperlinkButtonUtil.createHyperlinkButton("Set Default");
         setDefaultBtn.setOnAction(e -> setDefaultTemplate());
         
-        templateBar.getChildren().addAll(templateLabel, templateComboBox, saveBtn, newBtn, duplicateBtn, renameBtn, deleteBtn, setDefaultBtn);
+        // Template management group
+        HBox templateManagementGroup = HyperlinkButtonUtil.createButtonGroup(5, 
+            saveBtn, newBtn, duplicateBtn, renameBtn, deleteBtn, setDefaultBtn);
+        
+        templateBar.getChildren().addAll(templateLabel, templateComboBox, templateManagementGroup);
         
         // Input section with label and clear button
         HBox inputHeader = new HBox(10);
         inputHeader.setAlignment(Pos.CENTER_LEFT);
-        Label inputLabel = new Label("Input Text:");
+        Label inputLabel = new Label("INPUT");
+        inputLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
         
         // Spacer to push clear button to the right
         Region inputSpacer = new Region();
         HBox.setHgrow(inputSpacer, Priority.ALWAYS);
         
-        Button loadFileBtn = new Button("Load File");
+        Button loadFileBtn = HyperlinkButtonUtil.createHyperlinkButton("Load File");
         loadFileBtn.setOnAction(e -> loadFileContent());
         
-        Button clearInputBtn = new Button("Clear Input");
+        Button clearInputBtn = HyperlinkButtonUtil.createHyperlinkButton("Clear Input");
         clearInputBtn.setOnAction(e -> inputTextArea.clear());
         
-        inputHeader.getChildren().addAll(inputLabel, inputSpacer, loadFileBtn, clearInputBtn);
+        // Input actions group
+        HBox inputActionsGroup = HyperlinkButtonUtil.createButtonGroup(5, loadFileBtn, clearInputBtn);
+        
+        inputHeader.getChildren().addAll(inputLabel, inputSpacer, inputActionsGroup);
         
         inputTextArea = new TextArea();
         inputTextArea.setPrefRowCount(8);
@@ -227,16 +240,20 @@ public class RegexEditorPanel extends BorderPane {
         patternsSection.setPadding(new Insets(5));
         
         // Pattern buttons header (replacing "Regex Patterns:" label)
-        HBox patternButtons = new HBox(5);
+        HBox patternButtons = new HBox(10);
         patternButtons.setAlignment(Pos.CENTER_LEFT);
-        Button addPatternBtn = new Button("Add Pattern");
-        Button removePatternBtn = new Button("Remove");
-        // Make buttons same size as help button
-        addPatternBtn.setStyle("-fx-font-size: 12px; -fx-padding: 2 6 2 6;");
-        removePatternBtn.setStyle("-fx-font-size: 12px; -fx-padding: 2 6 2 6;");
+        Label patternsLabel = new Label("REGEX PATTERNS");
+        patternsLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
+        Button addPatternBtn = HyperlinkButtonUtil.createHyperlinkButton("Add Pattern");
         addPatternBtn.setOnAction(e -> addPattern());
+        
+        Button removePatternBtn = HyperlinkButtonUtil.createHyperlinkButton("Remove");
         removePatternBtn.setOnAction(e -> removeSelectedPattern());
-        patternButtons.getChildren().addAll(addPatternBtn, removePatternBtn);
+        
+        // Pattern management group
+        HBox patternManagementGroup = HyperlinkButtonUtil.createButtonGroup(5, addPatternBtn, removePatternBtn);
+        
+        patternButtons.getChildren().addAll(patternsLabel, patternManagementGroup);
         
         patternsTable = new TableView<>(patterns);
         patternsTable.setEditable(true);
@@ -270,17 +287,19 @@ public class RegexEditorPanel extends BorderPane {
         templateSection.setPadding(new Insets(5));
         
         HBox templateHeader = new HBox(10);
-        Label templateTextLabel = new Label("Output Template:");
-        Button helpBtn = new Button("?");
-        helpBtn.setStyle("-fx-font-size: 12px; -fx-padding: 2 6 2 6;");
+        Label templateTextLabel = new Label("OUTPUT TEMPLATE");
+        templateTextLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
+        Button helpBtn = HyperlinkButtonUtil.createHyperlinkButton("?");
         helpBtn.setOnAction(e -> showHelpDialog());
         
-        Button manageTestsBtn = new Button("Tests");
-        manageTestsBtn.setStyle("-fx-font-size: 12px; -fx-padding: 2 6 2 6;");
+        Button manageTestsBtn = HyperlinkButtonUtil.createHyperlinkButton("Tests");
         manageTestsBtn.setOnAction(e -> showTestsDialog());
         manageTestsBtn.setTooltip(new Tooltip("Manage and run tests"));
         
-        templateHeader.getChildren().addAll(templateTextLabel, helpBtn, manageTestsBtn);
+        // Template editor tools group
+        HBox templateToolsGroup = HyperlinkButtonUtil.createButtonGroup(5, helpBtn, manageTestsBtn);
+        
+        templateHeader.getChildren().addAll(templateTextLabel, templateToolsGroup);
         templateHeader.setAlignment(Pos.CENTER_LEFT);
         
         templateArea = new CodeArea();
@@ -310,11 +329,13 @@ public class RegexEditorPanel extends BorderPane {
         // Output header with buttons on the right
         HBox outputHeader = new HBox(10);
         outputHeader.setAlignment(Pos.CENTER_LEFT);
-        Label outputLabel = new Label("Output:");
+        Label outputLabel = new Label("OUTPUT");
+        outputLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
         
         // Checkbox for showing no-match patterns
         showNoMatchesCheckBox = new CheckBox("Show no matches");
         showNoMatchesCheckBox.setSelected(false);
+        HyperlinkButtonUtil.styleAsHyperlinkCheckBox(showNoMatchesCheckBox);
         showNoMatchesCheckBox.setOnAction(e -> {
             // Re-process template if there's content
             if (webEngine.getDocument() != null) {
@@ -326,14 +347,15 @@ public class RegexEditorPanel extends BorderPane {
         debugOutputCheckBox = new CheckBox("Debug output");
         debugOutputCheckBox.setSelected(false);
         debugOutputCheckBox.setTooltip(new Tooltip("Enable debug output to console for regex processing"));
+        HyperlinkButtonUtil.styleAsHyperlinkCheckBox(debugOutputCheckBox);
         
         // Spacer to push buttons to the right
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
         
-        Button processBtn = new Button("Process");
-        Button clearBtn = new Button("Clear Output");
-        Button popOutBtn = new Button("Pop Out");
+        Button processBtn = HyperlinkButtonUtil.createHyperlinkButton("Process");
+        Button clearBtn = HyperlinkButtonUtil.createHyperlinkButton("Clear Output");
+        Button popOutBtn = HyperlinkButtonUtil.createHyperlinkButton("Pop Out");
         processBtn.setOnAction(e -> processTemplate());
         clearBtn.setOnAction(e -> {
             if (webEngine != null) {
@@ -370,7 +392,10 @@ public class RegexEditorPanel extends BorderPane {
             });
         });
         
-        outputHeader.getChildren().addAll(outputLabel, showNoMatchesCheckBox, debugOutputCheckBox, spacer, processBtn, clearBtn, popOutBtn);
+        // Output actions group
+        HBox outputActionsGroup = HyperlinkButtonUtil.createButtonGroup(5, processBtn, clearBtn, popOutBtn);
+        
+        outputHeader.getChildren().addAll(outputLabel, showNoMatchesCheckBox, debugOutputCheckBox, spacer, outputActionsGroup);
         
         // Create placeholder for WebView - will be initialized lazily
         outputScrollPane = new ScrollPane();
@@ -2623,7 +2648,7 @@ public class RegexEditorPanel extends BorderPane {
         resultsArea.setStyle("-fx-background-color: #f8f8f8;");
         
         // Test button
-        Button testButton = new Button("Test Pattern");
+        Button testButton = HyperlinkButtonUtil.createHyperlinkButton("Test Pattern");
         testButton.setOnAction(e -> {
             String regexText = regexArea.getText();
             String testText = testArea.getText();
@@ -2662,7 +2687,7 @@ public class RegexEditorPanel extends BorderPane {
         HBox buttonBox = new HBox(10);
         buttonBox.setAlignment(Pos.CENTER_RIGHT);
         
-        Button saveButton = new Button("Save");
+        Button saveButton = HyperlinkButtonUtil.createHyperlinkButton("Save");
         saveButton.setOnAction(e -> {
             try {
                 Pattern.compile(regexArea.getText()); // Validate before saving
@@ -2677,15 +2702,21 @@ public class RegexEditorPanel extends BorderPane {
             }
         });
         
-        Button cancelButton = new Button("Cancel");
+        Button cancelButton = HyperlinkButtonUtil.createHyperlinkButton("Cancel");
         cancelButton.setOnAction(e -> editorStage.close());
         
-        buttonBox.getChildren().addAll(cancelButton, saveButton);
+        // Dialog actions group
+        HBox dialogActionsGroup = HyperlinkButtonUtil.createButtonGroup(5, cancelButton, saveButton);
+        
+        buttonBox.getChildren().addAll(dialogActionsGroup);
+        
+        // Test actions group
+        HBox testActionsGroup = HyperlinkButtonUtil.createButtonGroup(5, testButton);
         
         root.getChildren().addAll(
             nameLabel, nameField,
             regexLabel, regexArea, validationLabel,
-            testLabel, testArea, testButton,
+            testLabel, testArea, testActionsGroup,
             resultsLabel, resultsArea,
             buttonBox
         );
@@ -3326,21 +3357,33 @@ public class RegexEditorPanel extends BorderPane {
         
         // Test management buttons
         HBox buttonBar = new HBox(10);
-        Button addBtn = new Button("Add Test");
-        Button editBtn = new Button("Edit");
-        Button deleteBtn = new Button("Delete");
-        Button duplicateBtn = new Button("Duplicate");
-        Button runSelectedBtn = new Button("Run Selected");
-        Button runAllBtn = new Button("Run All");
+        Button[] testManagementButtons = HyperlinkButtonUtil.createHyperlinkButtons(
+            "Add Test", "Edit", "Delete", "Duplicate");
+        Button addBtn = testManagementButtons[0];
+        Button editBtn = testManagementButtons[1];
+        Button deleteBtn = testManagementButtons[2];
+        Button duplicateBtn = testManagementButtons[3];
+        
+        Button[] testExecutionButtons = HyperlinkButtonUtil.createHyperlinkButtons(
+            "Run Selected", "Run All");
+        Button runSelectedBtn = testExecutionButtons[0];
+        Button runAllBtn = testExecutionButtons[1];
         
         editBtn.setDisable(true);
         deleteBtn.setDisable(true);
         duplicateBtn.setDisable(true);
         runSelectedBtn.setDisable(true);
         
-        buttonBar.getChildren().addAll(addBtn, editBtn, deleteBtn, duplicateBtn, 
-                                       new Separator(Orientation.VERTICAL),
-                                       runSelectedBtn, runAllBtn);
+        // Test management group
+        HBox testManagementGroup = HyperlinkButtonUtil.createButtonGroup(5, addBtn, editBtn, deleteBtn, duplicateBtn);
+        
+        // Test execution group
+        HBox testExecutionGroup = HyperlinkButtonUtil.createButtonGroup(5, runSelectedBtn, runAllBtn);
+        
+        // Add some spacing between groups
+        Region groupSpacer = HyperlinkButtonUtil.createGroupSpacer(15);
+        
+        buttonBar.getChildren().addAll(testManagementGroup, groupSpacer, testExecutionGroup);
         
         // Tests table
         testsTable = new TableView<>();
@@ -3640,8 +3683,8 @@ public class RegexEditorPanel extends BorderPane {
         
         // Pattern buttons
         HBox patternButtons = new HBox(5);
-        Button addPatternBtn = new Button("Add Pattern");
-        Button removePatternBtn = new Button("Remove Pattern");
+        Button addPatternBtn = HyperlinkButtonUtil.createHyperlinkButton("Add Pattern");
+        Button removePatternBtn = HyperlinkButtonUtil.createHyperlinkButton("Remove Pattern");
         removePatternBtn.setDisable(patternsList.isEmpty()); // Disable if no patterns exist
         
         addPatternBtn.setOnAction(e -> {
@@ -3663,7 +3706,10 @@ public class RegexEditorPanel extends BorderPane {
             removePatternBtn.setDisable(newSel == null || patternsList.isEmpty());
         });
         
-        patternButtons.getChildren().addAll(addPatternBtn, removePatternBtn);
+        // Pattern management group in dialog
+        HBox dialogPatternGroup = HyperlinkButtonUtil.createButtonGroup(5, addPatternBtn, removePatternBtn);
+        
+        patternButtons.getChildren().addAll(dialogPatternGroup);
         patternsSection.getChildren().addAll(patternsLabel, patternsTable, patternButtons);
         
         // Template
@@ -4575,6 +4621,14 @@ public class RegexEditorPanel extends BorderPane {
         }
         return null;
     }
+    
+    /**
+     * Adds smooth scaling animation to a button on hover
+     */
+    private void addSmoothHoverAnimation(Button button) {
+        HyperlinkButtonUtil.addSmoothHoverAnimation(button);
+    }
+    
     
     /**
      * Cleanup method to stop timers and remove listeners

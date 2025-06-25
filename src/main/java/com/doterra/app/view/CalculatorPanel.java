@@ -13,11 +13,15 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.stage.Stage;
 import javafx.scene.Scene;
+import javafx.animation.ScaleTransition;
+import javafx.animation.Interpolator;
+import javafx.util.Duration;
 
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.io.*;
+import com.doterra.app.util.HyperlinkButtonUtil;
 
 public class CalculatorPanel extends BorderPane {
     private TextArea inputArea;
@@ -183,7 +187,7 @@ public class CalculatorPanel extends BorderPane {
     private VBox createTopSection() {
         VBox topSection = new VBox(10);
         topSection.setPadding(new Insets(10));
-        topSection.setStyle("-fx-background-color: white; -fx-border-color: #9C27B0; -fx-border-width: 2; -fx-border-radius: 5; -fx-background-radius: 5;");
+        topSection.setStyle("-fx-background-color: #f9f9f9; -fx-border-color: #ddd; -fx-border-radius: 5;");
         
         HBox labelWithButtons = new HBox(10);
         labelWithButtons.setAlignment(Pos.CENTER_LEFT);
@@ -194,10 +198,16 @@ public class CalculatorPanel extends BorderPane {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
         
-        Button clearBtn = createStyledButton("Clear", "#f44336", e -> inputArea.clear());
-        Button popOutBtn = createStyledButton("Pop Out", "#2196F3", e -> showInputPopOut());
+        Button clearBtn = HyperlinkButtonUtil.createHyperlinkButton("Clear");
+        clearBtn.setOnAction(e -> inputArea.clear());
         
-        labelWithButtons.getChildren().addAll(inputLabel, spacer, clearBtn, popOutBtn);
+        Button popOutBtn = HyperlinkButtonUtil.createHyperlinkButton("Pop Out");
+        popOutBtn.setOnAction(e -> showInputPopOut());
+        
+        // Input actions group
+        HBox inputActionsGroup = HyperlinkButtonUtil.createButtonGroup(5, clearBtn, popOutBtn);
+        
+        labelWithButtons.getChildren().addAll(inputLabel, spacer, inputActionsGroup);
         
         inputArea = new TextArea();
         inputArea.setPrefRowCount(3);
@@ -212,12 +222,13 @@ public class CalculatorPanel extends BorderPane {
     private VBox createMiddleSection() {
         VBox middleSection = new VBox(10);
         middleSection.setPadding(new Insets(10));
-        middleSection.setStyle("-fx-background-color: white; -fx-border-color: #ddd; -fx-border-radius: 5;");
+        middleSection.setStyle("-fx-background-color: #f9f9f9; -fx-border-color: #ddd; -fx-border-radius: 5;");
         
         Label displayLabel = new Label("Click on numbers to build your equation:");
         displayLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
         
         ScrollPane scrollPane = new ScrollPane();
+        scrollPane.setStyle("-fx-background-color: #f9f9f9; -fx-border-color: #cccccc; -fx-border-width: 1; -fx-border-radius: 3; -fx-background-radius: 3;");
         displayFlow = new TextFlow();
         displayFlow.setPadding(new Insets(10));
         displayFlow.setLineSpacing(5);
@@ -250,6 +261,7 @@ public class CalculatorPanel extends BorderPane {
         savedRegexCombo = new ComboBox<>(savedRegexPatterns);
         savedRegexCombo.setPromptText("Saved patterns");
         savedRegexCombo.setPrefWidth(200);
+        HyperlinkButtonUtil.styleAsHyperlinkComboBox(savedRegexCombo);
         savedRegexCombo.setOnAction(e -> {
             NamedPattern selected = savedRegexCombo.getValue();
             if (selected != null) {
@@ -263,15 +275,35 @@ public class CalculatorPanel extends BorderPane {
         HBox patternButtons = new HBox(5);
         patternButtons.setAlignment(Pos.CENTER_LEFT);
         
-        Button newBtn = createStyledButton("New", "#2196F3", e -> newRegexPattern());
-        Button clearBtn = createStyledButton("Clear", "#795548", e -> clearRegexPattern());
-        Button saveBtn = createStyledButton("Save", "#4CAF50", e -> saveRegexPattern());
-        Button duplicateBtn = createStyledButton("Duplicate", "#FF9800", e -> duplicateRegexPattern());
-        Button renameBtn = createStyledButton("Rename", "#9C27B0", e -> renameRegexPattern());
-        Button setDefaultBtn = createStyledButton("Set Default", "#607D8B", e -> setDefaultRegexPattern());
-        Button deleteBtn = createStyledButton("Delete", "#f44336", e -> deleteRegexPattern());
+        Button[] patternManagementButtons = HyperlinkButtonUtil.createHyperlinkButtons(
+            "New", "Clear", "Save", "Duplicate", "Rename", "Set Default", "Delete");
         
-        patternButtons.getChildren().addAll(newBtn, clearBtn, saveBtn, duplicateBtn, renameBtn, setDefaultBtn, deleteBtn);
+        Button newBtn = patternManagementButtons[0];
+        newBtn.setOnAction(e -> newRegexPattern());
+        
+        Button clearBtn = patternManagementButtons[1];
+        clearBtn.setOnAction(e -> clearRegexPattern());
+        
+        Button saveBtn = patternManagementButtons[2];
+        saveBtn.setOnAction(e -> saveRegexPattern());
+        
+        Button duplicateBtn = patternManagementButtons[3];
+        duplicateBtn.setOnAction(e -> duplicateRegexPattern());
+        
+        Button renameBtn = patternManagementButtons[4];
+        renameBtn.setOnAction(e -> renameRegexPattern());
+        
+        Button setDefaultBtn = patternManagementButtons[5];
+        setDefaultBtn.setOnAction(e -> setDefaultRegexPattern());
+        
+        Button deleteBtn = patternManagementButtons[6];
+        deleteBtn.setOnAction(e -> deleteRegexPattern());
+        
+        // Pattern management group
+        HBox patternManagementGroup = HyperlinkButtonUtil.createButtonGroup(5, 
+            newBtn, clearBtn, saveBtn, duplicateBtn, renameBtn, setDefaultBtn, deleteBtn);
+        
+        patternButtons.getChildren().addAll(patternManagementGroup);
         
         HBox operationControls = new HBox(10);
         operationControls.setAlignment(Pos.CENTER_LEFT);
@@ -282,13 +314,18 @@ public class CalculatorPanel extends BorderPane {
         operationCombo.getItems().addAll("Add All (+)", "Multiply All (×)", "Add Sequentially", "Custom Expression");
         operationCombo.setValue("Add All (+)");
         operationCombo.setPrefWidth(150);
+        HyperlinkButtonUtil.styleAsHyperlinkComboBox(operationCombo);
         
-        Button applyRegexBtn = createStyledButton("Find & Apply", "#2196F3", e -> applyRegexOperation());
-        applyRegexBtn.setStyle(applyRegexBtn.getStyle() + "; -fx-font-weight: bold;");
+        Button applyRegexBtn = HyperlinkButtonUtil.createHyperlinkButton("Find & Apply");
+        applyRegexBtn.setOnAction(e -> applyRegexOperation());
         
-        Button highlightOnlyBtn = createStyledButton("Highlight Only", "#FF9800", e -> highlightRegexMatches());
+        Button highlightOnlyBtn = HyperlinkButtonUtil.createHyperlinkButton("Highlight Only");
+        highlightOnlyBtn.setOnAction(e -> highlightRegexMatches());
         
-        operationControls.getChildren().addAll(operationLabel, operationCombo, applyRegexBtn, highlightOnlyBtn);
+        // Operation actions group
+        HBox operationActionsGroup = HyperlinkButtonUtil.createButtonGroup(5, applyRegexBtn, highlightOnlyBtn);
+        
+        operationControls.getChildren().addAll(operationLabel, operationCombo, operationActionsGroup);
         
         regexSection.getChildren().addAll(regexLabel, regexControls, patternButtons, operationControls);
         return regexSection;
@@ -297,7 +334,7 @@ public class CalculatorPanel extends BorderPane {
     private VBox createEquationSection() {
         VBox equationSection = new VBox(10);
         equationSection.setPadding(new Insets(10));
-        equationSection.setStyle("-fx-background-color: white; -fx-border-color: #2196F3; -fx-border-width: 2; -fx-border-radius: 5; -fx-background-radius: 5;");
+        equationSection.setStyle("-fx-background-color: #f9f9f9; -fx-border-color: #ddd; -fx-border-radius: 5;");
         
         Label equationLabel = new Label("Mathematical Equation:");
         equationLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
@@ -317,23 +354,39 @@ public class CalculatorPanel extends BorderPane {
         Button leftParenBtn = createSpecialOperatorButton("(");
         Button rightParenBtn = createSpecialOperatorButton(")");
         
-        operatorBox.getChildren().addAll(plusBtn, minusBtn, multiplyBtn, divideBtn, leftParenBtn, rightParenBtn);
+        // Math operators group
+        HBox mathOperatorsGroup = HyperlinkButtonUtil.createButtonGroup(5, plusBtn, minusBtn, multiplyBtn, divideBtn);
+        
+        // Parentheses group  
+        HBox parenthesesGroup = HyperlinkButtonUtil.createButtonGroup(5, leftParenBtn, rightParenBtn);
+        
+        Region operatorSpacer = HyperlinkButtonUtil.createGroupSpacer(10);
+        
+        operatorBox.getChildren().addAll(mathOperatorsGroup, operatorSpacer, parenthesesGroup);
         
         // Control buttons
         HBox controlBox = new HBox(10);
         controlBox.setAlignment(Pos.CENTER);
         
-        Button eraseBtn = createStyledButton("Erase Last", "#ff6b6b", e -> eraseLastSelection());
-        eraseBtn.setStyle(eraseBtn.getStyle() + "; -fx-font-weight: bold;");
+        Button eraseBtn = HyperlinkButtonUtil.createHyperlinkButton("Erase Last");
+        eraseBtn.setOnAction(e -> eraseLastSelection());
         
-        Button clearBtn = createStyledButton("Clear All", "#ff4444", e -> clearAll());
-        clearBtn.setStyle(clearBtn.getStyle() + "; -fx-font-weight: bold;");
+        Button clearBtn = HyperlinkButtonUtil.createHyperlinkButton("Clear All");
+        clearBtn.setOnAction(e -> clearAll());
         
-        Button calculateBtn = createStyledButton("Calculate", "#4CAF50", e -> calculate());
-        calculateBtn.setStyle(calculateBtn.getStyle() + "; -fx-font-weight: bold; -fx-font-size: 16px;");
+        Button calculateBtn = HyperlinkButtonUtil.createHyperlinkButton("Calculate");
+        calculateBtn.setOnAction(e -> calculate());
         calculateBtn.setPrefWidth(150);
         
-        controlBox.getChildren().addAll(eraseBtn, clearBtn, calculateBtn);
+        // Calculator control group
+        HBox calculatorControlGroup = HyperlinkButtonUtil.createButtonGroup(5, eraseBtn, clearBtn);
+        
+        // Main action group (separate for emphasis)
+        HBox calculateGroup = HyperlinkButtonUtil.createButtonGroup(5, calculateBtn);
+        
+        Region controlSpacer = HyperlinkButtonUtil.createGroupSpacer(10);
+        
+        controlBox.getChildren().addAll(calculatorControlGroup, controlSpacer, calculateGroup);
         
         equationSection.getChildren().addAll(equationLabel, equationField, operatorBox, controlBox);
         return equationSection;
@@ -343,7 +396,7 @@ public class CalculatorPanel extends BorderPane {
         HBox resultSection = new HBox(10);
         resultSection.setPadding(new Insets(15));
         resultSection.setAlignment(Pos.CENTER_LEFT);
-        resultSection.setStyle("-fx-background-color: white; -fx-border-color: #4CAF50; -fx-border-width: 2; -fx-border-radius: 5; -fx-background-radius: 5;");
+        resultSection.setStyle("-fx-background-color: #f9f9f9; -fx-border-color: #ddd; -fx-border-radius: 5;");
         
         Label resultLabel = new Label("Result:");
         resultLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
@@ -353,7 +406,8 @@ public class CalculatorPanel extends BorderPane {
         resultField.setPrefWidth(200);
         resultField.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-background-color: #e8f5e9; -fx-border-color: #4CAF50; -fx-border-width: 1; -fx-border-radius: 3;");
         
-        Button copyBtn = createStyledButton("Copy", "#2196F3", e -> copyResult());
+        Button copyBtn = HyperlinkButtonUtil.createHyperlinkButton("Copy");
+        copyBtn.setOnAction(e -> copyResult());
         
         resultSection.getChildren().addAll(resultLabel, resultField, copyBtn);
         return resultSection;
@@ -899,47 +953,27 @@ public class CalculatorPanel extends BorderPane {
     }
     
     private Button createOperatorButton(String display, String actual, boolean isDefault) {
-        Button btn = new Button(display);
+        Button btn = HyperlinkButtonUtil.createHyperlinkButton(display);
         btn.setPrefWidth(50);
         btn.setPrefHeight(35);
         operatorButtons.put(actual, btn);
         
-        String baseStyle = "-fx-font-size: 16px; -fx-font-weight: bold;";
-        String selectedStyle = baseStyle + " -fx-border-color: #FF9800; -fx-border-width: 3; -fx-border-radius: 5;";
-        
         if (isDefault) {
-            btn.setStyle(selectedStyle);
-        } else {
-            btn.setStyle(baseStyle);
+            HyperlinkButtonUtil.setButtonSelected(btn);
         }
-        
-        // Add hover effects
-        btn.setOnMouseEntered(e -> {
-            if (btn.getStyle().contains("#FF9800")) {
-                btn.setStyle(selectedStyle + " -fx-background-color: #FFE0B2;");
-            } else {
-                btn.setStyle(baseStyle + " -fx-background-color: #e3f2fd;");
-            }
-        });
-        
-        btn.setOnMouseExited(e -> {
-            if (btn.getStyle().contains("#FF9800")) {
-                btn.setStyle(selectedStyle);
-            } else {
-                btn.setStyle(baseStyle);
-            }
-        });
         
         btn.setOnAction(e -> {
             // Update current operator
             currentOperator = actual;
             
-            // Update button styles
+            // Update button selection states
             operatorButtons.forEach((op, button) -> {
-                if (op.equals(actual)) {
-                    button.setStyle(selectedStyle);
-                } else if (!op.equals("(") && !op.equals(")")) {
-                    button.setStyle(baseStyle);
+                if (!op.equals("(") && !op.equals(")")) { // Skip parentheses buttons
+                    if (op.equals(actual)) {
+                        HyperlinkButtonUtil.setButtonSelected(button);
+                    } else {
+                        HyperlinkButtonUtil.setButtonUnselected(button);
+                    }
                 }
             });
             
@@ -952,15 +986,9 @@ public class CalculatorPanel extends BorderPane {
     }
     
     private Button createSpecialOperatorButton(String operator) {
-        Button btn = new Button(operator);
+        Button btn = HyperlinkButtonUtil.createHyperlinkButton(operator);
         btn.setPrefWidth(50);
         btn.setPrefHeight(35);
-        String baseStyle = "-fx-font-size: 16px; -fx-font-weight: bold; -fx-background-color: #e0e0e0;";
-        btn.setStyle(baseStyle);
-        
-        // Add hover effects
-        btn.setOnMouseEntered(e -> btn.setStyle(baseStyle + " -fx-background-color: #bdbdbd;"));
-        btn.setOnMouseExited(e -> btn.setStyle(baseStyle));
         
         btn.setOnAction(e -> {
             equationField.setText(equationField.getText() + operator);
@@ -1263,18 +1291,23 @@ public class CalculatorPanel extends BorderPane {
         HBox buttonBox = new HBox(10);
         buttonBox.setAlignment(Pos.CENTER_RIGHT);
         
-        Button applyBtn = createStyledButton("Apply", "#4CAF50", e -> {
+        Button applyBtn = HyperlinkButtonUtil.createHyperlinkButton("Apply");
+        applyBtn.setOnAction(e -> {
             inputArea.setText(popOutTextArea.getText());
             popOutStage.close();
             popOutStage = null;
         });
         
-        Button cancelBtn = createStyledButton("Cancel", "#757575", e -> {
+        Button cancelBtn = HyperlinkButtonUtil.createHyperlinkButton("Cancel");
+        cancelBtn.setOnAction(e -> {
             popOutStage.close();
             popOutStage = null;
         });
         
-        buttonBox.getChildren().addAll(cancelBtn, applyBtn);
+        // Dialog actions group
+        HBox dialogActionsGroup = HyperlinkButtonUtil.createButtonGroup(5, cancelBtn, applyBtn);
+        
+        buttonBox.getChildren().addAll(dialogActionsGroup);
         
         root.getChildren().addAll(label, popOutTextArea, buttonBox);
         
@@ -1400,5 +1433,12 @@ public class CalculatorPanel extends BorderPane {
                 break;
             }
         }
+    }
+    
+    /**
+     * Adds smooth scaling animation to a button on hover
+     */
+    private void addSmoothHoverAnimation(Button button) {
+        HyperlinkButtonUtil.addSmoothHoverAnimation(button);
     }
 }

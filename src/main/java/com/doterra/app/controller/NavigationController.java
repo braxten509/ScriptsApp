@@ -8,9 +8,13 @@ import com.doterra.app.view.TodoPanel;
 import com.doterra.app.view.StickyNotePanel;
 import com.doterra.app.view.CalendarPanel;
 import com.doterra.app.view.ImageNotesPanel;
+import com.doterra.app.model.NavigationSection;
+import com.doterra.app.util.NavigationPreferences;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.control.Label;
 import javafx.geometry.Pos;
+import java.util.ArrayList;
+import java.util.List;
 
 public class NavigationController {
 
@@ -28,6 +32,10 @@ public class NavigationController {
     private CalendarPanel calendarPanel;
     private ImageNotesPanel imageNotesPanel;
     
+    // Navigation structure
+    private NavigationPreferences navigationPreferences;
+    private List<NavigationSection> navigationSections;
+    
     public NavigationController(BorderPane mainContainer, 
                                ChatScriptsPanel chatScriptsPanel,
                                EmailScriptsPanel emailScriptsPanel,
@@ -43,6 +51,10 @@ public class NavigationController {
         this.stickyNotePanel = null;
         this.calendarPanel = null;
         this.imageNotesPanel = null;
+        
+        // Initialize navigation structure
+        this.navigationPreferences = NavigationPreferences.load();
+        this.navigationSections = createNavigationSections();
     }
     
     public void showPanel(String panelId) {
@@ -148,6 +160,62 @@ public class NavigationController {
     }
     
     /**
+     * Create the navigation sections structure
+     */
+    private List<NavigationSection> createNavigationSections() {
+        List<NavigationSection> sections = new ArrayList<>();
+        
+        // Basic section (expanded by default)
+        NavigationSection basicSection = new NavigationSection("Basic", navigationPreferences.isSectionExpanded("Basic"));
+        basicSection.addItem("Chat Scripts", "chat");
+        basicSection.addItem("Email Scripts", "email");
+        basicSection.addItem("Todo", "todo", true); // Has badge
+        basicSection.addItem("Sticky Notes", "stickynote");
+        basicSection.addItem("Calendar", "calendar");
+        sections.add(basicSection);
+        
+        // Advanced section (collapsed by default)
+        NavigationSection advancedSection = new NavigationSection("Advanced", navigationPreferences.isSectionExpanded("Advanced"));
+        advancedSection.addItem("Regex Editor", "regex");
+        advancedSection.addItem("Calculator", "calculator");
+        advancedSection.addItem("Image Notes", "imagenotes");
+        sections.add(advancedSection);
+        
+        return sections;
+    }
+    
+    /**
+     * Get the navigation sections
+     */
+    public List<NavigationSection> getNavigationSections() {
+        return navigationSections;
+    }
+    
+    /**
+     * Toggle a section's expanded/collapsed state
+     */
+    public void toggleSection(String sectionTitle) {
+        NavigationSection section = navigationSections.stream()
+            .filter(s -> s.getTitle().equals(sectionTitle))
+            .findFirst()
+            .orElse(null);
+        
+        if (section != null) {
+            boolean newState = !section.isExpanded();
+            section.setExpanded(newState);
+            navigationPreferences.setSectionExpanded(sectionTitle, newState);
+            navigationPreferences.save();
+        }
+    }
+    
+    /**
+     * Get navigation preferences
+     */
+    public NavigationPreferences getNavigationPreferences() {
+        return navigationPreferences;
+    }
+    
+    /**
      * Cleanup all panels that have been created
      */
     public void cleanup() {
@@ -159,6 +227,11 @@ public class NavigationController {
         }
         if (regexEditorPanel != null) {
             regexEditorPanel.cleanup();
+        }
+        
+        // Save navigation preferences on cleanup
+        if (navigationPreferences != null) {
+            navigationPreferences.save();
         }
     }
 }

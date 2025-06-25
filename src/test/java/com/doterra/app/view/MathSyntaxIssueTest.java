@@ -47,7 +47,7 @@ public class MathSyntaxIssueTest {
         };
         
         for (String template : templates) {
-            System.out.println("Template: '" + template.replace("\t", "\\t").replace("\n", "\\n") + "'");
+            System.out.println("TEMPLATE" + template.replace("\t", "\\t").replace("\n", "\\n") + "'");
             System.out.println("  Starts with '{MATH ': " + template.startsWith("{MATH ", 0));
             System.out.println("  Starts with '{MATH': " + template.startsWith("{MATH", 0));
             
