@@ -61,6 +61,10 @@ import javafx.geometry.Orientation;
 import javafx.concurrent.Worker;
 import netscape.javascript.JSObject;
 import javafx.scene.input.KeyCode;
+import javafx.stage.FileChooser;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 
 public class RegexEditorPanel extends BorderPane {
     private static final String TEMPLATES_FILE = "data/regex_templates.dat";
@@ -86,11 +90,14 @@ public class RegexEditorPanel extends BorderPane {
     private Map<String, Double> templateVariables;
     private PauseTransition validationPause;
     
+    // Track validation errors for tooltip display
+    private Map<Integer, String> validationErrors = new HashMap<>(); // position -> error message
+    
     public RegexEditorPanel() {
         patterns = FXCollections.observableArrayList();
         templates = new ArrayList<>();
-        testManager = new RegexTestManager();
         testsList = FXCollections.observableArrayList();
+        templateVariables = new HashMap<>();
         
         // Initialize validation debouncer
         validationPause = new PauseTransition(Duration.millis(300));
@@ -99,24 +106,42 @@ public class RegexEditorPanel extends BorderPane {
                 validateTemplateSyntax(templateArea.getText());
             }
         });
-        testsList.addAll(testManager.getTests());
-        templateVariables = new HashMap<>();
-        loadTemplates();
-        loadPreferences();
-        setupUI();
         
-        // Load default template if exists
-        RegexTemplate defaultTemplate = templates.stream()
-            .filter(RegexTemplate::isDefault)
-            .findFirst()
-            .orElse(null);
+        // Setup basic UI immediately
+        setupBasicUI();
         
-        if (defaultTemplate != null) {
-            loadTemplate(defaultTemplate);
+        // Load data and complete setup asynchronously
+        Platform.runLater(() -> {
+            try {
+                loadTemplates();
+                loadPreferences();
+                initializeTestManager();
+                setupAdvancedFeatures();
+                
+                // Load default template if exists
+                RegexTemplate defaultTemplate = templates.stream()
+                    .filter(RegexTemplate::isDefault)
+                    .findFirst()
+                    .orElse(null);
+                
+                if (defaultTemplate != null) {
+                    loadTemplate(defaultTemplate);
+                }
+            } catch (Exception e) {
+                System.err.println("Error during RegexEditorPanel initialization: " + e.getMessage());
+                e.printStackTrace();
+            }
+        });
+    }
+    
+    private void initializeTestManager() {
+        if (testManager == null) {
+            testManager = new RegexTestManager();
+            testsList.addAll(testManager.getTests());
         }
     }
     
-    protected void setupUI() {
+    protected void setupBasicUI() {
         setPadding(new Insets(10));
         
         // Top: Template management and input text area
@@ -142,7 +167,7 @@ public class RegexEditorPanel extends BorderPane {
             }
         });
         templateComboBox.setPrefWidth(200);
-        templateComboBox.setItems(FXCollections.observableArrayList(templates));
+        // Note: Items will be set after templates are loaded asynchronously
         templateComboBox.setOnAction(e -> {
             RegexTemplate selected = templateComboBox.getValue();
             if (selected != null) {
@@ -179,10 +204,13 @@ public class RegexEditorPanel extends BorderPane {
         Region inputSpacer = new Region();
         HBox.setHgrow(inputSpacer, Priority.ALWAYS);
         
+        Button loadFileBtn = new Button("Load File");
+        loadFileBtn.setOnAction(e -> loadFileContent());
+        
         Button clearInputBtn = new Button("Clear Input");
         clearInputBtn.setOnAction(e -> inputTextArea.clear());
         
-        inputHeader.getChildren().addAll(inputLabel, inputSpacer, clearInputBtn);
+        inputHeader.getChildren().addAll(inputLabel, inputSpacer, loadFileBtn, clearInputBtn);
         
         inputTextArea = new TextArea();
         inputTextArea.setPrefRowCount(8);
@@ -233,12 +261,6 @@ public class RegexEditorPanel extends BorderPane {
         // Add context menu to patterns table
         setupPatternsContextMenu();
         
-        // Apply saved column widths
-        applyColumnWidths();
-        
-        // Add listeners to save column widths when they change
-        nameCol.widthProperty().addListener((obs, oldWidth, newWidth) -> savePreferences());
-        patternCol.widthProperty().addListener((obs, oldWidth, newWidth) -> savePreferences());
         VBox.setVgrow(patternsTable, Priority.ALWAYS);
         
         patternsSection.getChildren().addAll(patternButtons, patternsTable);
@@ -313,7 +335,16 @@ public class RegexEditorPanel extends BorderPane {
         Button clearBtn = new Button("Clear Output");
         Button popOutBtn = new Button("Pop Out");
         processBtn.setOnAction(e -> processTemplate());
-        clearBtn.setOnAction(e -> webEngine.loadContent("<html><body style='font-family: Segoe UI, Arial, sans-serif; font-size: 14px; margin: 10px; background: white;'></body></html>"));
+        clearBtn.setOnAction(e -> {
+            if (webEngine != null) {
+                webEngine.loadContent("<html><body style='font-family: Segoe UI, Arial, sans-serif; font-size: 14px; margin: 10px; background: white;'></body></html>");
+            } else {
+                // Reset to placeholder if WebView not initialized
+                Label placeholderLabel = new Label("Output will appear here after processing...");
+                placeholderLabel.setStyle("-fx-font-size: 14px; -fx-text-fill: #666; -fx-padding: 20;");
+                outputScrollPane.setContent(placeholderLabel);
+            }
+        });
         popOutBtn.setOnAction(e -> {
             // Check if template is empty
             String template = templateArea.getText();
@@ -341,37 +372,18 @@ public class RegexEditorPanel extends BorderPane {
         
         outputHeader.getChildren().addAll(outputLabel, showNoMatchesCheckBox, debugOutputCheckBox, spacer, processBtn, clearBtn, popOutBtn);
         
-        // Create WebView for selectable output with clickable links
-        outputWebView = new WebView();
-        webEngine = outputWebView.getEngine();
-        outputWebView.setPrefHeight(200);
-        outputWebView.setMinHeight(200);
-        
-        // Initialize with empty content
-        webEngine.loadContent("<html><body style='font-family: Segoe UI, Arial, sans-serif; font-size: 14px; margin: 10px; background: white;'></body></html>");
-        
-        // Handle link clicks for copying to clipboard
-        webEngine.getLoadWorker().stateProperty().addListener((obs, oldState, newState) -> {
-            if (newState == Worker.State.SUCCEEDED) {
-                JSObject window = (JSObject) webEngine.executeScript("window");
-                window.setMember("javaApp", this);
-                webEngine.executeScript("""
-                    document.addEventListener('click', function(e) {
-                        if (e.target.classList.contains('regex-match')) {
-                            e.preventDefault();
-                            window.javaApp.copyToClipboard(e.target.textContent);
-                        }
-                    });
-                """);
-            }
-        });
-        
-        outputScrollPane = new ScrollPane(outputWebView);
+        // Create placeholder for WebView - will be initialized lazily
+        outputScrollPane = new ScrollPane();
         outputScrollPane.setFitToWidth(true);
         outputScrollPane.setFitToHeight(true);
         outputScrollPane.setPrefViewportHeight(200);
         outputScrollPane.setMinHeight(200);
         outputScrollPane.setStyle("-fx-background-color: white; -fx-border-color: #cccccc; -fx-border-width: 1px;");
+        
+        // Add placeholder content
+        Label placeholderLabel = new Label("Output will appear here after processing...");
+        placeholderLabel.setStyle("-fx-font-size: 14px; -fx-text-fill: #666; -fx-padding: 20;");
+        outputScrollPane.setContent(placeholderLabel);
         
         bottomSection.getChildren().addAll(outputHeader, outputScrollPane);
         
@@ -392,6 +404,59 @@ public class RegexEditorPanel extends BorderPane {
         showInfo("Template saved successfully");
     }
     
+    private void setupAdvancedFeatures() {
+        // Setup advanced validation with checkboxes action handlers
+        showNoMatchesCheckBox.setOnAction(e -> {
+            // Re-process template if there's content
+            if (webEngine != null && webEngine.getDocument() != null) {
+                processTemplate();
+            }
+        });
+        
+        // Populate template ComboBox now that templates are loaded
+        refreshTemplateComboBox();
+        
+        // Apply saved column widths
+        applyColumnWidths();
+        
+        // Add listeners to save column widths when they change
+        TableColumn<PatternEntry, String> nameCol = (TableColumn<PatternEntry, String>) patternsTable.getColumns().get(0);
+        TableColumn<PatternEntry, String> patternCol = (TableColumn<PatternEntry, String>) patternsTable.getColumns().get(1);
+        nameCol.widthProperty().addListener((obs, oldWidth, newWidth) -> savePreferences());
+        patternCol.widthProperty().addListener((obs, oldWidth, newWidth) -> savePreferences());
+    }
+    
+    private void initializeWebViewIfNeeded() {
+        if (outputWebView == null) {
+            // Create WebView for selectable output with clickable links
+            outputWebView = new WebView();
+            webEngine = outputWebView.getEngine();
+            outputWebView.setPrefHeight(200);
+            outputWebView.setMinHeight(200);
+            
+            // Initialize with empty content
+            webEngine.loadContent("<html><body style='font-family: Segoe UI, Arial, sans-serif; font-size: 14px; margin: 10px; background: white;'></body></html>");
+            
+            // Handle link clicks for copying to clipboard
+            webEngine.getLoadWorker().stateProperty().addListener((obs, oldState, newState) -> {
+                if (newState == Worker.State.SUCCEEDED) {
+                    JSObject window = (JSObject) webEngine.executeScript("window");
+                    window.setMember("javaApp", this);
+                    webEngine.executeScript("""
+                        document.addEventListener('click', function(e) {
+                            if (e.target.classList.contains('regex-match')) {
+                                e.preventDefault();
+                                window.javaApp.copyToClipboard(e.target.textContent);
+                            }
+                        });
+                    """);
+                }
+            });
+            
+            // Replace placeholder with WebView
+            outputScrollPane.setContent(outputWebView);
+        }
+    }
     
     private void deleteTemplate() {
         if (currentTemplate == null) {
@@ -817,13 +882,17 @@ public class RegexEditorPanel extends BorderPane {
             new HelpEntry("{if condition}...{/if}", "Conditional block (condition evaluated)"),
             new HelpEntry("{if pattern > 5}...{/if}", "Mathematical comparison"),
             new HelpEntry("{if pattern1 + pattern2 > 10}...{/if}", "Mathematical operations"),
-            new HelpEntry("{MATH expression}", "Evaluates and displays mathematical expression"),
-            new HelpEntry("{MATH 5 + 3}", "Displays: 8"),
-            new HelpEntry("{MATH sqrt(16)}", "Displays: 4"),
+            new HelpEntry("{MATH expression}", "Performs silent calculation (no output)"),
+            new HelpEntry("{MATH counter = 5}", "Sets counter to 5 silently"),
+            new HelpEntry("{MATH total += price}", "Adds price to total silently"),
+            new HelpEntry("{SHOW expression}", "Evaluates and displays mathematical expression"),
+            new HelpEntry("{SHOW 5 + 3}", "Displays: 8"),
+            new HelpEntry("{SHOW sqrt(16)}", "Displays: 4"),
+            new HelpEntry("{SHOW counter}", "Shows current value of counter"),
             new HelpEntry("{VAR name = expression}", "Declares variable with calculated value"),
             new HelpEntry("{VAR tax = 0.08}", "Creates variable 'tax' with value 0.08"),
             new HelpEntry("{variable_name}", "Shows stored variable value"),
-            new HelpEntry("{MATH var1 + var2}", "Math expressions can use variables"),
+            new HelpEntry("{MATH/SHOW var1 + var2}", "Math/Show expressions can use variables"),
             new HelpEntry("{VAR total = price * (1 + tax)}", "Variables can reference patterns and other variables"),
             new HelpEntry("{VAR counter++}", "Increment variable by 1 (post-increment)"),
             new HelpEntry("{VAR counter--}", "Decrement variable by 1 (post-decrement)"),
@@ -907,6 +976,12 @@ public class RegexEditorPanel extends BorderPane {
     }
     
     private void processTemplate() {
+        // Initialize WebView if needed (lazy loading for performance)
+        initializeWebViewIfNeeded();
+        
+        // Clear template variables for fresh calculation
+        templateVariables.clear();
+        
         String inputText = inputTextArea.getText();
         String template = templateArea.getText();
         
@@ -915,8 +990,8 @@ public class RegexEditorPanel extends BorderPane {
             return;
         }
         
-        // Check if template has MATH/VAR blocks that don't require input
-        boolean hasStandaloneMathVar = template.contains("{MATH ") || template.contains("{VAR ");
+        // Check if template has MATH/VAR/SHOW blocks that don't require input
+        boolean hasStandaloneMathVar = template.contains("{MATH ") || template.contains("{VAR ") || template.contains("{SHOW ");
         boolean hasPatternDependentCommands = template.contains("{for ") || template.contains("{if ") || 
                                             template.matches(".*\\{[^{}]*\\.(group|length)\\([^}]*\\}.*");
         
@@ -928,29 +1003,255 @@ public class RegexEditorPanel extends BorderPane {
         
         try {
             Map<String, List<MatchResult>> patternMatches = new HashMap<>();
+            StringBuilder debugLog = new StringBuilder();
+            
+            // Check if debug output is enabled
+            boolean debugEnabled = debugOutputCheckBox != null && debugOutputCheckBox.isSelected();
+            
+            if (debugEnabled) {
+                debugLog.append("=== DEBUG OUTPUT ===\n\n");
+                debugLog.append("=== INPUT TEXT ===\n");
+                debugLog.append(inputText.isEmpty() ? "(empty)" : inputText);
+                debugLog.append("\n\n");
+                
+                debugLog.append("=== TEMPLATE ===\n");
+                debugLog.append(template);
+                debugLog.append("\n\n");
+                
+                debugLog.append("=== PATTERNS ===\n");
+                if (patterns.isEmpty()) {
+                    debugLog.append("No patterns defined\n");
+                } else {
+                    for (PatternEntry entry : patterns) {
+                        debugLog.append("Pattern '").append(entry.getName()).append("': ").append(entry.getPattern()).append("\n");
+                    }
+                }
+                debugLog.append("\n");
+            }
             
             // Find all matches for each pattern
+            if (debugEnabled) {
+                debugLog.append("=== PATTERN MATCHING ===\n");
+            }
+            
             for (PatternEntry entry : patterns) {
                 Pattern pattern = Pattern.compile(entry.getPattern());
                 Matcher matcher = pattern.matcher(inputText);
                 List<MatchResult> matches = new ArrayList<>();
                 
+                if (debugEnabled) {
+                    debugLog.append("\nPattern '").append(entry.getName()).append("': ").append(entry.getPattern()).append("\n");
+                }
+                
+                int matchCount = 0;
                 while (matcher.find()) {
-                    matches.add(matcher.toMatchResult());
+                    MatchResult matchResult = matcher.toMatchResult();
+                    matches.add(matchResult);
+                    
+                    if (debugEnabled) {
+                        debugLog.append("  Match ").append(matchCount++).append(": \"").append(matchResult.group()).append("\"\n");
+                        for (int i = 1; i <= matchResult.groupCount(); i++) {
+                            debugLog.append("    Group ").append(i).append(": \"").append(matchResult.group(i)).append("\"\n");
+                        }
+                    }
+                }
+                
+                if (debugEnabled) {
+                    debugLog.append("  Total matches for '").append(entry.getName()).append("': ").append(matches.size()).append("\n");
                 }
                 
                 patternMatches.put(entry.getName(), matches);
             }
             
+            if (debugEnabled) {
+                debugLog.append("\n");
+            }
+            
             // Process template and display with clickable links
-            processTemplateWithLinks(template, patternMatches);
+            if (debugEnabled) {
+                processTemplateWithLinksAndDebug(template, patternMatches, debugLog);
+            } else {
+                processTemplateWithLinks(template, patternMatches);
+            }
             
         } catch (Exception e) {
             showAlert("Error processing template: " + e.getMessage());
         }
     }
     
+    private void processTemplateWithLinksAndDebug(String template, Map<String, List<MatchResult>> matches, StringBuilder debugLog) {
+        // Clear template variables for fresh calculation
+        templateVariables.clear();
+        
+        // Process template with debug logging
+        debugLog.append("=== TEMPLATE PROCESSING ===\n");
+        String output = processTemplateScriptWithDebug(template, matches, debugLog);
+        
+        debugLog.append("\n=== FINAL OUTPUT ===\n");
+        debugLog.append(output);
+        debugLog.append("\n");
+        
+        // Clear terminal and print debug output
+        clearTerminal();
+        System.out.println("\n" + debugLog.toString());
+        
+        // Generate HTML content with both output and debug information
+        StringBuilder htmlContent = new StringBuilder();
+        
+        // Add the processed output with clickable links
+        htmlContent.append("<div style='margin-bottom: 20px;'>");
+        htmlContent.append("<h3 style='color: #333; margin-bottom: 10px;'>Output:</h3>");
+        htmlContent.append("<div style='background: #f5f5f5; padding: 10px; border: 1px solid #ddd; border-radius: 4px;'>");
+        
+        // Process output with clickable links (reuse existing logic)
+        Map<String, Set<String>> displayedMatches = new HashMap<>();
+        for (Map.Entry<String, List<MatchResult>> entry : matches.entrySet()) {
+            Set<String> matchTexts = new HashSet<>();
+            for (MatchResult match : entry.getValue()) {
+                String matchText = match.group();
+                if (matchText != null && !matchText.isEmpty()) {
+                    matchTexts.add(matchText);
+                }
+            }
+            displayedMatches.put(entry.getKey(), matchTexts);
+        }
+        
+        // Generate clickable links in output
+        String outputHtml = generateHtmlWithLinks(output, displayedMatches);
+        htmlContent.append(outputHtml);
+        
+        htmlContent.append("</div>");
+        htmlContent.append("</div>");
+        
+        // Add debug output
+        htmlContent.append("<div>");
+        htmlContent.append("<h3 style='color: #333; margin-bottom: 10px;'>Debug Output:</h3>");
+        htmlContent.append("<pre style='background: #f0f0f0; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-family: \"Courier New\", monospace; font-size: 12px; overflow-x: auto;'>");
+        htmlContent.append(escapeHtml(debugLog.toString()));
+        htmlContent.append("</pre>");
+        htmlContent.append("</div>");
+        
+        // Create complete HTML document
+        String fullHtml = "<html><head><style>"
+                         + "body { font-family: Segoe UI, Arial, sans-serif; font-size: 14px; margin: 10px; background: white; }"
+                         + ".regex-match { color: #0066cc; text-decoration: none; cursor: pointer; }"
+                         + ".regex-match:hover { text-decoration: underline; }"
+                         + "</style></head><body>" 
+                         + htmlContent.toString() 
+                         + "</body></html>";
+        
+        // Load HTML in WebView
+        webEngine.loadContent(fullHtml);
+        
+        // Add click handler for regex matches
+        webEngine.getLoadWorker().stateProperty().addListener((obs, oldState, newState) -> {
+            if (newState == Worker.State.SUCCEEDED) {
+                JSObject window = (JSObject) webEngine.executeScript("window");
+                window.setMember("javaApp", new Object() {
+                    public void copyToClipboard(String text) {
+                        Platform.runLater(() -> {
+                            Clipboard clipboard = Clipboard.getSystemClipboard();
+                            ClipboardContent content = new ClipboardContent();
+                            content.putString(text);
+                            clipboard.setContent(content);
+                        });
+                    }
+                });
+                
+                webEngine.executeScript(
+                    "document.addEventListener('click', function(e) {" +
+                    "  if (e.target.classList.contains('regex-match')) {" +
+                    "    javaApp.copyToClipboard(e.target.textContent);" +
+                    "  }" +
+                    "});"
+                );
+            }
+        });
+    }
+    
+    private String generateHtmlWithLinks(String output, Map<String, Set<String>> displayedMatches) {
+        StringBuilder htmlContent = new StringBuilder();
+        int lastEnd = 0;
+        
+        // Create a list of all matches in the entire output with their positions
+        List<MatchInfo> matchInfos = new ArrayList<>();
+        
+        // Create a list of all match texts sorted by length (longest first)
+        List<String> allMatchTexts = new ArrayList<>();
+        Map<String, String> matchToPattern = new HashMap<>();
+        
+        for (Map.Entry<String, Set<String>> entry : displayedMatches.entrySet()) {
+            for (String matchText : entry.getValue()) {
+                if (!matchText.isEmpty()) {
+                    allMatchTexts.add(matchText);
+                    matchToPattern.put(matchText, entry.getKey());
+                }
+            }
+        }
+        
+        // Sort by length descending to find longer matches first
+        allMatchTexts.sort((a, b) -> Integer.compare(b.length(), a.length()));
+        
+        for (String matchText : allMatchTexts) {
+            int index = 0;
+            while ((index = output.indexOf(matchText, index)) != -1) {
+                matchInfos.add(new MatchInfo(index, index + matchText.length(), matchText, matchToPattern.get(matchText)));
+                index += matchText.length();
+            }
+        }
+        
+        // Sort matches by start position
+        matchInfos.sort((a, b) -> Integer.compare(a.start, b.start));
+        
+        // Remove overlapping matches (keep the first one)
+        List<MatchInfo> nonOverlapping = new ArrayList<>();
+        for (MatchInfo match : matchInfos) {
+            if (nonOverlapping.isEmpty() || match.start >= nonOverlapping.get(nonOverlapping.size() - 1).end) {
+                nonOverlapping.add(match);
+            }
+        }
+        
+        // Generate HTML with clickable links
+        for (MatchInfo match : nonOverlapping) {
+            // Add text before the match
+            if (match.start > lastEnd) {
+                String beforeText = output.substring(lastEnd, match.start);
+                // Check if text contains HTML tags (like <i> for no matches)
+                if (beforeText.contains("<i>") || beforeText.contains("</i>")) {
+                    htmlContent.append(beforeText); // Don't escape HTML
+                } else {
+                    htmlContent.append(escapeHtml(beforeText));
+                }
+            }
+            
+            // Create clickable span for the match
+            htmlContent.append("<span class='regex-match' title='Pattern: ")
+                      .append(escapeHtml(match.patternName))
+                      .append(" - Click to copy'>")
+                      .append(escapeHtml(match.text))
+                      .append("</span>");
+            
+            lastEnd = match.end;
+        }
+        
+        // Add remaining text
+        if (lastEnd < output.length()) {
+            String remainingText = output.substring(lastEnd);
+            // Check if text contains HTML tags (like <i> for no matches)
+            if (remainingText.contains("<i>") || remainingText.contains("</i>")) {
+                htmlContent.append(remainingText); // Don't escape HTML
+            } else {
+                htmlContent.append(escapeHtml(remainingText));
+            }
+        }
+        
+        return htmlContent.toString();
+    }
+    
     private void processTemplateWithLinks(String template, Map<String, List<MatchResult>> matches) {
+        // Clear template variables for fresh calculation
+        templateVariables.clear();
+        
         // First, get all the matches that will be displayed
         Map<String, Set<String>> displayedMatches = new HashMap<>();
         for (Map.Entry<String, List<MatchResult>> entry : matches.entrySet()) {
@@ -1106,6 +1407,8 @@ public class RegexEditorPanel extends BorderPane {
     }
     
     private String processTemplateScript(String template, Map<String, List<MatchResult>> matches) {
+        // Clear template variables for fresh calculation
+        templateVariables.clear();
         return processTemplateScript(template, matches, null, -1);
     }
     
@@ -1199,7 +1502,7 @@ public class RegexEditorPanel extends BorderPane {
                     pos += 2;
                 }
             }
-            // Handle math expressions
+            // Handle math expressions (silent calculation)
             else if (template.startsWith("{MATH ", pos)) {
                 int end = template.indexOf("}", pos);
                 if (end == -1) {
@@ -1209,7 +1512,34 @@ public class RegexEditorPanel extends BorderPane {
                 }
                 
                 String mathExpression = template.substring(pos + 6, end).trim();
-                double value = evaluateMathWithContext(mathExpression, matches, currentPattern, currentIndex);
+                debugPrint("DEBUG MATH: Processing expression '" + mathExpression + "' with currentPattern='" + currentPattern + "', currentIndex=" + currentIndex);
+                
+                // Check if this is a variable assignment (contains =, +=, -=, *=, /=)
+                if (mathExpression.contains("=") && !mathExpression.contains("==") && !mathExpression.contains("!=") && 
+                    !mathExpression.contains("<=") && !mathExpression.contains(">=")) {
+                    // Handle variable assignment
+                    processVariableAssignment(mathExpression, matches, currentPattern, currentIndex);
+                    debugPrint("DEBUG MATH: Variable assignment completed (silent)");
+                } else {
+                    // Handle regular mathematical expression
+                    double value = evaluateMathWithContext(mathExpression, matches, currentPattern, currentIndex);
+                    debugPrint("DEBUG MATH: Evaluated " + mathExpression + " = " + value + " (silent)");
+                }
+                
+                // MATH is silent - no output to result
+                pos = end + 1;
+            }
+            // Handle show expressions (display calculation result)
+            else if (template.startsWith("{SHOW ", pos)) {
+                int end = template.indexOf("}", pos);
+                if (end == -1) {
+                    result.append(template.charAt(pos));
+                    pos++;
+                    continue;
+                }
+                
+                String showExpression = template.substring(pos + 6, end).trim();
+                double value = evaluateMathWithContext(showExpression, matches, currentPattern, currentIndex);
                 
                 // Format the result nicely (remove .0 for whole numbers, limit decimals to 2 places)
                 if (value == (long) value) {
@@ -1218,7 +1548,7 @@ public class RegexEditorPanel extends BorderPane {
                     result.append(String.format("%.2f", value));
                 }
                 
-                debugPrint("DEBUG MATH: Evaluated " + mathExpression + " = " + value);
+                debugPrint("DEBUG SHOW: Evaluated " + showExpression + " = " + value + " (displayed)");
                 
                 pos = end + 1;
             }
@@ -1959,6 +2289,42 @@ public class RegexEditorPanel extends BorderPane {
         return "{" + variable + "}";
     }
     
+    private void clearTerminal() {
+        try {
+            String os = System.getProperty("os.name").toLowerCase();
+            ProcessBuilder pb;
+            
+            if (os.contains("win")) {
+                // Try Windows command
+                pb = new ProcessBuilder("cmd", "/c", "cls");
+            } else {
+                // Try Unix/Linux command
+                pb = new ProcessBuilder("clear");
+            }
+            
+            // Inherit the current process's I/O
+            pb.inheritIO();
+            Process process = pb.start();
+            process.waitFor();
+            
+        } catch (Exception e) {
+            // Fallback: Try ANSI escape codes
+            try {
+                System.out.print("\033[2J\033[H");
+                System.out.flush();
+                
+                // Alternative ANSI sequences
+                System.out.print("\u001b[2J");
+                System.out.print("\u001b[H");
+                System.out.flush();
+                
+            } catch (Exception e2) {
+                // Last fallback: print separator
+                System.out.println("\n" + "=".repeat(80) + "\n");
+            }
+        }
+    }
+    
     private void showAlert(String message) {
         Alert alert = new Alert(Alert.AlertType.ERROR);
         alert.setTitle("Error");
@@ -2367,8 +2733,8 @@ public class RegexEditorPanel extends BorderPane {
             
             int lastEnd = 0;
             
-            // Clear any existing tooltips
-            templateArea.setOnMouseMoved(null);
+            // Clear any existing error tracking
+            validationErrors.clear();
             
             while (matcher.find()) {
                 String command = matcher.group(1).trim();
@@ -2380,8 +2746,12 @@ public class RegexEditorPanel extends BorderPane {
                     spansBuilder.add(Collections.emptyList(), start - lastEnd);
                 }
                 
-                // Add styling for the command itself
-                if (!isValidCommand(command)) {
+                // Check for validation errors
+                String errorMessage = getCommandValidationError(command);
+                if (errorMessage != null) {
+                    // Track error for tooltip
+                    validationErrors.put(start, errorMessage);
+                    // Add error styling
                     spansBuilder.add(Collections.singletonList("invalid-command"), end - start);
                 } else {
                     spansBuilder.add(Collections.emptyList(), end - start);
@@ -2389,6 +2759,9 @@ public class RegexEditorPanel extends BorderPane {
                 
                 lastEnd = end;
             }
+            
+            // Set up tooltip functionality
+            setupTooltipHandling();
             
             // Add normal styling for any remaining text
             if (lastEnd < templateText.length()) {
@@ -2473,6 +2846,201 @@ public class RegexEditorPanel extends BorderPane {
         
         // Check for pattern references
         return isValidPatternReference(command);
+    }
+    
+    /**
+     * Gets validation error message for a command (returns null if valid)
+     */
+    private String getCommandValidationError(String command) {
+        if (command == null || command.trim().isEmpty()) {
+            return "Empty command";
+        }
+        
+        command = command.trim();
+        
+        // Check for loop commands
+        if (command.equals("/for")) {
+            return null; // Valid
+        }
+        
+        if (command.startsWith("for ")) {
+            String patternName = command.substring(4).trim();
+            String patternError = getPatternReferenceError(patternName);
+            if (patternError != null) {
+                return "Invalid for loop: " + patternError;
+            }
+            return null; // Valid
+        }
+        
+        // Check for if commands
+        if (command.equals("/if")) {
+            return null; // Valid
+        }
+        
+        if (command.startsWith("if ")) {
+            // Basic validation for if condition - could be enhanced
+            String condition = command.substring(3).trim();
+            if (condition.isEmpty()) {
+                return "Empty if condition";
+            }
+            return null; // Valid for now
+        }
+        
+        // Check for MATH expressions
+        if (command.startsWith("MATH ")) {
+            String expression = command.substring(5).trim();
+            if (expression.isEmpty()) {
+                return "Empty MATH expression";
+            }
+            return null; // Valid for now
+        }
+        
+        // Check for SHOW expressions
+        if (command.startsWith("SHOW ")) {
+            String expression = command.substring(5).trim();
+            if (expression.isEmpty()) {
+                return "Empty SHOW expression";
+            }
+            return null; // Valid for now
+        }
+        
+        // Check for VAR assignments
+        if (command.startsWith("VAR ")) {
+            String varCommand = command.substring(4).trim();
+            if (varCommand.contains("=")) {
+                String[] parts = varCommand.split("=", 2);
+                String varName = parts[0].trim();
+                if (!isValidVariableName(varName)) {
+                    return "Invalid variable name: '" + varName + "'";
+                }
+                return null; // Valid
+            } else if (varCommand.contains("+=")) {
+                String[] parts = varCommand.split("\\+=", 2);
+                String varName = parts[0].trim();
+                if (!isValidVariableName(varName)) {
+                    return "Invalid variable name: '" + varName + "'";
+                }
+                if (!templateVariables.containsKey(varName)) {
+                    return "Variable '" + varName + "' not defined";
+                }
+                return null; // Valid
+            } else {
+                return "Invalid VAR syntax (missing = or +=)";
+            }
+        }
+        
+        // Check for pattern references first (since {name} syntax is primarily for patterns)
+        String patternError = getPatternReferenceError(command);
+        if (patternError == null) {
+            return null; // Valid pattern reference
+        }
+        
+        // If not a valid pattern, check if it could be a variable reference
+        if (isValidVariableName(command)) {
+            if (templateVariables.containsKey(command)) {
+                return null; // Valid variable reference
+            } else {
+                // It's a valid name format but neither a pattern nor defined variable
+                // Since {name} syntax is primarily for patterns, suggest pattern error
+                return "Pattern '" + command + "' not found (use {MATH " + command + "} for variables)";
+            }
+        }
+        
+        // If it's not even a valid name format, return the pattern error
+        return patternError;
+    }
+    
+    /**
+     * Gets validation error for pattern reference (returns null if valid)
+     */
+    private String getPatternReferenceError(String reference) {
+        if (reference == null || reference.trim().isEmpty()) {
+            return "Empty pattern reference";
+        }
+        
+        reference = reference.trim();
+        
+        // Check for array index syntax: pattern[index]
+        if (reference.contains("[") && reference.contains("]")) {
+            int bracketStart = reference.indexOf('[');
+            int bracketEnd = reference.lastIndexOf(']');
+            
+            if (bracketStart >= bracketEnd) {
+                return "Invalid array syntax in '" + reference + "'";
+            }
+            
+            String patternName = reference.substring(0, bracketStart);
+            String indexStr = reference.substring(bracketStart + 1, bracketEnd);
+            String afterBracket = reference.substring(bracketEnd + 1);
+            
+            // Validate pattern name
+            if (!patternName.matches("^[a-zA-Z][a-zA-Z0-9_]*$")) {
+                return "Invalid pattern name: '" + patternName + "'";
+            }
+            
+            // Check if pattern exists
+            final String finalPatternName1 = patternName;
+            boolean patternExists = patterns.stream().anyMatch(p -> finalPatternName1.equals(p.getName()));
+            if (!patternExists) {
+                return "Pattern '" + patternName + "' not found";
+            }
+            
+            // Validate index
+            try {
+                Integer.parseInt(indexStr);
+            } catch (NumberFormatException e) {
+                return "Invalid array index: '" + indexStr + "'";
+            }
+            
+            // Check for .group() after array
+            if (!afterBracket.isEmpty()) {
+                if (!afterBracket.matches("^\\.group\\(\\d+\\)$")) {
+                    return "Invalid syntax after array: '" + afterBracket + "'";
+                }
+            }
+            
+            return null; // Valid
+        }
+        
+        // Check for .group() syntax: pattern.group(n)
+        if (reference.contains(".group(") && reference.contains(")")) {
+            int groupStart = reference.indexOf(".group(");
+            String patternName = reference.substring(0, groupStart);
+            String groupPart = reference.substring(groupStart);
+            
+            // Validate pattern name
+            if (!patternName.matches("^[a-zA-Z][a-zA-Z0-9_]*$")) {
+                return "Invalid pattern name: '" + patternName + "'";
+            }
+            
+            // Check if pattern exists
+            final String finalPatternName2 = patternName;
+            boolean patternExists = patterns.stream().anyMatch(p -> finalPatternName2.equals(p.getName()));
+            if (!patternExists) {
+                return "Pattern '" + patternName + "' not found";
+            }
+            
+            // Validate group syntax
+            if (!groupPart.matches("^\\.group\\(\\d+\\)$")) {
+                return "Invalid group syntax: '" + groupPart + "'";
+            }
+            
+            return null; // Valid
+        }
+        
+        // Simple pattern name
+        if (!reference.matches("^[a-zA-Z][a-zA-Z0-9_]*$")) {
+            return "Invalid pattern name format: '" + reference + "'";
+        }
+        
+        // Check if pattern exists
+        final String finalReference = reference;
+        boolean patternExists = patterns.stream().anyMatch(p -> finalReference.equals(p.getName()));
+        if (!patternExists) {
+            return "Pattern '" + reference + "' not found";
+        }
+        
+        return null; // Valid
     }
     
     /**
@@ -2742,6 +3310,9 @@ public class RegexEditorPanel extends BorderPane {
      * Shows the test management dialog
      */
     private void showTestsDialog() {
+        // Initialize test manager if needed (lazy loading for performance)
+        initializeTestManager();
+        
         Dialog<Void> dialog = new Dialog<>();
         dialog.setTitle("Regex Tests Manager");
         dialog.setHeaderText("Manage and run regex tests");
@@ -3471,7 +4042,7 @@ public class RegexEditorPanel extends BorderPane {
                     pos += 2;
                 }
             }
-            // Handle MATH expressions
+            // Handle MATH expressions (silent calculation)
             else if (template.startsWith("{MATH ", pos)) {
                 int end = template.indexOf("}", pos);
                 if (end == -1) {
@@ -3481,9 +4052,33 @@ public class RegexEditorPanel extends BorderPane {
                 }
                 
                 String mathExpression = template.substring(pos + 6, end).trim();
-                debugLog.append("Processing MATH expression: '").append(mathExpression).append("'\n");
+                debugLog.append("Processing MATH expression: '").append(mathExpression).append("' with currentPattern='").append(currentPattern).append("', currentIndex=").append(currentIndex).append(" (silent)\n");
                 
                 double value = evaluateMathWithContext(mathExpression, matches, currentPattern, currentIndex);
+                debugLog.append("MATH result: ").append(value).append(" (not displayed)\n");
+                
+                // MATH is silent - no output to result
+                pos = end + 1;
+                // Skip trailing newline after MATH block to make it completely invisible
+                if (pos < template.length() && template.charAt(pos) == '\n') {
+                    pos++;
+                } else if (pos < template.length() - 1 && template.charAt(pos) == '\r' && template.charAt(pos + 1) == '\n') {
+                    pos += 2;
+                }
+            }
+            // Handle SHOW expressions (display calculation result)
+            else if (template.startsWith("{SHOW ", pos)) {
+                int end = template.indexOf("}", pos);
+                if (end == -1) {
+                    result.append(template.charAt(pos));
+                    pos++;
+                    continue;
+                }
+                
+                String showExpression = template.substring(pos + 6, end).trim();
+                debugLog.append("Processing SHOW expression: '").append(showExpression).append("'\n");
+                
+                double value = evaluateMathWithContext(showExpression, matches, currentPattern, currentIndex);
                 
                 // Format the result nicely (remove .0 for whole numbers, limit decimals to 2 places)
                 String formattedResult;
@@ -3493,7 +4088,7 @@ public class RegexEditorPanel extends BorderPane {
                     formattedResult = String.format("%.2f", value);
                 }
                 
-                debugLog.append("MATH result: ").append(formattedResult).append("\n");
+                debugLog.append("SHOW result: ").append(formattedResult).append(" (displayed)\n");
                 result.append(formattedResult);
                 
                 pos = end + 1;
@@ -3844,6 +4439,141 @@ public class RegexEditorPanel extends BorderPane {
         dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
         
         dialog.showAndWait();
+    }
+    
+    /**
+     * Loads content from a selected text file into the input text area
+     */
+    private void loadFileContent() {
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Select Text File");
+        
+        // Set file extension filters
+        FileChooser.ExtensionFilter txtFilter = new FileChooser.ExtensionFilter("Text files (*.txt)", "*.txt");
+        FileChooser.ExtensionFilter logFilter = new FileChooser.ExtensionFilter("Log files (*.log)", "*.log");
+        FileChooser.ExtensionFilter csvFilter = new FileChooser.ExtensionFilter("CSV files (*.csv)", "*.csv");
+        FileChooser.ExtensionFilter allFilter = new FileChooser.ExtensionFilter("All files (*.*)", "*.*");
+        
+        fileChooser.getExtensionFilters().addAll(txtFilter, logFilter, csvFilter, allFilter);
+        fileChooser.setSelectedExtensionFilter(txtFilter);
+        
+        // Get the stage for the file chooser dialog
+        Stage stage = (Stage) inputTextArea.getScene().getWindow();
+        java.io.File selectedFile = fileChooser.showOpenDialog(stage);
+        
+        if (selectedFile != null) {
+            try {
+                // Read file content
+                Path filePath = selectedFile.toPath();
+                String content = Files.readString(filePath, StandardCharsets.UTF_8);
+                
+                // Set content in the input text area
+                inputTextArea.setText(content);
+                
+                // Show success message with file info
+                long fileSize = Files.size(filePath);
+                String sizeStr = formatFileSize(fileSize);
+                inputTextArea.setPromptText("Loaded file: " + selectedFile.getName() + " (" + sizeStr + ")");
+                
+            } catch (IOException e) {
+                // Show error dialog
+                Alert alert = new Alert(Alert.AlertType.ERROR);
+                alert.setTitle("File Load Error");
+                alert.setHeaderText("Unable to load file");
+                alert.setContentText("Could not read the selected file: " + e.getMessage());
+                alert.showAndWait();
+            } catch (OutOfMemoryError e) {
+                // Handle very large files
+                Alert alert = new Alert(Alert.AlertType.ERROR);
+                alert.setTitle("File Too Large");
+                alert.setHeaderText("File is too large to load");
+                alert.setContentText("The selected file is too large to load into memory. Please choose a smaller file.");
+                alert.showAndWait();
+            }
+        }
+    }
+    
+    /**
+     * Formats file size in human-readable format
+     */
+    private String formatFileSize(long bytes) {
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return String.format("%.1f KB", bytes / 1024.0);
+        if (bytes < 1024 * 1024 * 1024) return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
+        return String.format("%.1f GB", bytes / (1024.0 * 1024.0 * 1024.0));
+    }
+    
+    /**
+     * Sets up tooltip handling for underlined text in the template area
+     */
+    private void setupTooltipHandling() {
+        if (templateArea == null) {
+            return;
+        }
+        
+        // Create a tooltip for displaying error messages
+        Tooltip errorTooltip = new Tooltip();
+        errorTooltip.setShowDelay(Duration.millis(300));
+        errorTooltip.setHideDelay(Duration.millis(100));
+        errorTooltip.setStyle("-fx-background-color: #ffebee; -fx-text-fill: #d32f2f; -fx-border-color: #f44336; -fx-border-width: 1px; -fx-font-size: 12px;");
+        
+        // Set up mouse move handler to show tooltips
+        templateArea.setOnMouseMoved(e -> {
+            // Get the character position at the mouse location
+            int charIndex = templateArea.hit(e.getX(), e.getY()).getCharacterIndex().orElse(-1);
+            
+            if (charIndex >= 0) {
+                // Check if this position has a validation error
+                String errorMessage = findErrorAtPosition(charIndex);
+                
+                if (errorMessage != null) {
+                    // Show tooltip with error message
+                    errorTooltip.setText(errorMessage);
+                    if (!errorTooltip.isShowing()) {
+                        errorTooltip.show(templateArea, e.getScreenX() + 10, e.getScreenY() + 10);
+                    }
+                } else {
+                    // Hide tooltip if no error at this position
+                    if (errorTooltip.isShowing()) {
+                        errorTooltip.hide();
+                    }
+                }
+            } else {
+                // Hide tooltip if mouse is outside text area
+                if (errorTooltip.isShowing()) {
+                    errorTooltip.hide();
+                }
+            }
+        });
+        
+        // Hide tooltip when mouse exits the template area
+        templateArea.setOnMouseExited(e -> {
+            if (errorTooltip.isShowing()) {
+                errorTooltip.hide();
+            }
+        });
+    }
+    
+    /**
+     * Finds the error message for a given character position
+     */
+    private String findErrorAtPosition(int charIndex) {
+        // Find the error span that contains this character position
+        for (Map.Entry<Integer, String> entry : validationErrors.entrySet()) {
+            int errorStart = entry.getKey();
+            
+            // Find the end position by looking for the next '{' and '}' pair
+            String text = templateArea.getText();
+            if (errorStart < text.length() && charIndex >= errorStart) {
+                int braceStart = text.indexOf('{', errorStart);
+                int braceEnd = text.indexOf('}', braceStart);
+                
+                if (braceStart >= 0 && braceEnd >= 0 && charIndex >= braceStart && charIndex <= braceEnd) {
+                    return entry.getValue();
+                }
+            }
+        }
+        return null;
     }
     
     /**
